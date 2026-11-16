@@ -31,3 +31,5 @@ const p = parseAiFlags('Aqui vai: {"flags":[{"indicadores":["obitos:braga","inve
 assert.deepEqual(p.map((f) => [f.titulo, f.level, f.indicadores.join()]), [["A", "atencao", "obitos:braga"], ["B", "info", "resp"]]);
 assert.deepEqual(parseAiFlags("sem json", ind), []);
 console.log("selfcheck-ai-flags: ok");
+assert.deepEqual(parseAiFlags('```json\n{"flags":[{"indicadores":["[obitos:braga]"],"titulo":"D"}]}\n```', ind).map((f) => f.indicadores[0]), ["obitos:braga"]);
+console.log("selfcheck-ai-flags (ids com parênteses): ok");

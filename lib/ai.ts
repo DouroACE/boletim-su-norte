@@ -31,18 +31,23 @@ async function chat(url: string, key: string, model: string, prompt: string, sys
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: maxTokens,
+      // Modelos de raciocínio (gpt-oss) gastam max_tokens a "pensar": raciocínio curto e margem extra.
+      max_tokens: maxTokens * 3,
+      ...(/gpt-oss/.test(model) ? { reasoning_effort: "low" } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: prompt },
       ],
     }),
     next: { revalidate: 60 * 60 * 6 },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
   const j = await res.json();
-  return String(j.choices?.[0]?.message?.content ?? "");
+  const choice = j.choices?.[0];
+  const text = String(choice?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  if (!text) throw new Error(`resposta vazia do modelo (finish_reason: ${choice?.finish_reason ?? "?"})`);
+  return text;
 }
 
 const toLines = (s: string) =>
@@ -130,7 +135,7 @@ export function parseAiFlags(text: string, indicators: Indicator[]): AiFlag[] {
   if (!Array.isArray(list)) return [];
   const out: AiFlag[] = [];
   for (const f of list.slice(0, 8)) {
-    const ids = Array.isArray(f?.indicadores) ? [...new Set<string>(f.indicadores.map(String))].filter((id) => byId.has(id)) : [];
+    const ids = Array.isArray(f?.indicadores) ? [...new Set<string>(f.indicadores.map((x: unknown) => String(x).replace(/[[\]\s]/g, "")))].filter((id) => byId.has(id)) : [];
     const titulo = clip(f?.titulo, 140);
     if (!ids.length || !titulo) continue;
     const worst = ids.map((id) => byId.get(id)!.level).reduce((w, l) => (RANK[l] > RANK[w] ? l : w), "sem-dados" as Level);
