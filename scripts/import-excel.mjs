@@ -100,8 +100,11 @@ for (const r of rows.slice(1)) {
 }
 records.sort((a, b) => a.date.localeCompare(b.date));
 
+// Formato compacto (colunas + linhas) para manter o ficheiro pequeno
+const cols = [...new Set(records.flatMap((r) => Object.keys(r)))];
+const round = (v) => (typeof v === "number" ? Math.round(v * 100) / 100 : v);
 fs.writeFileSync(
   out,
-  JSON.stringify({ source: path.basename(src), generatedAt: new Date().toISOString(), records })
+  JSON.stringify({ source: path.basename(src), cols, rows: records.map((r) => cols.map((c) => round(r[c] ?? null))) })
 );
 console.log(`[import-excel] ${records.length} dias (${records[0]?.date} → ${records.at(-1)?.date}) → ${out}`);

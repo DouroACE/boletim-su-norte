@@ -13,7 +13,9 @@ export type LocalRec = {
   tMed: number; tMin: number; tMax: number; precip: number; icaro: number;
 };
 
-export const local = raw as { source: string; generatedAt: string; records: LocalRec[] };
+const compact = raw as { source: string; cols: string[]; rows: (string | number | null)[][] };
+const records = compact.rows.map((row) => Object.fromEntries(compact.cols.map((c, i) => [c, row[i]])) as unknown as LocalRec);
+export const local = { source: compact.source, records };
 const R = local.records;
 
 const DOW = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
