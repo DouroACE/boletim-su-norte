@@ -3,6 +3,10 @@
 // sozinha, no máximo de REVALIDATE em REVALIDATE segundos, sem servidor próprio.
 
 export const REVALIDATE = 60 * 60 * 3; // 3 horas
+import { ULS_NORTE, decumulate, groupByUls, compareHomologous, type UlsMetric } from "./uls";
+
+// Etiqueta comum a todas as recolhas: o cron diário (/api/revalidate) invalida-a e força dados frescos.
+export const DATA_TAG = "dados-publicos";
 
 const SNS = "https://transparencia.sns.gov.pt/api/explore/v2.1/catalog/datasets";
 
@@ -11,7 +15,7 @@ export type SourceStatus = { id: string; name: string; url: string; ok: boolean;
 
 async function getJSON<T>(url: string, revalidate = REVALIDATE): Promise<T> {
   const res = await fetch(url, {
-    next: { revalidate },
+    next: { revalidate, tags: [DATA_TAG] },
     headers: { Accept: "application/json", "User-Agent": "boletim-vigilancia-sazonal/1.0" },
     signal: AbortSignal.timeout(25_000),
   });
@@ -97,7 +101,8 @@ export async function fetchManchester(instituicao: string, sinceMonth: string): 
   type R = Record<string, number | string>;
   const rows = await getJSON<R[]>(`${SNS}/atendimentos-em-urgencia-triagem-manchester/exports/json?${q}`);
   const n = (r: R, k: string) => Number(r[`no_de_atendimentos_em_urgencia_su_triagem_manchester_${k}`] ?? 0);
-  return rows.map((r) => ({
+  // A SPMS publica valores acumulados desde janeiro: converter para mensais.
+  return decumulate(rows.map((r) => ({
     mes: String(r.tempo),
     vermelha: n(r, "vermelha"),
     laranja: n(r, "laranja"),
@@ -106,7 +111,57 @@ export async function fetchManchester(instituicao: string, sinceMonth: string): 
     azul: n(r, "azul"),
     branca: n(r, "branca"),
     semTriagem: Number(r.no_de_atendimentos_em_sem_triagem_manchester ?? 0),
-  }));
+  })), ["vermelha", "laranja", "amarela", "verde", "azul", "branca", "semTriagem"]);
+}
+
+/* ------------------------------------------------------------------ */
+/* Por ULS da Região Norte — SICO (óbitos por instituição) e urgências  */
+/* ------------------------------------------------------------------ */
+
+export type UlsRow = { key: string; nome: string; lat: number; lon: number; obitos: UlsMetric; urgencias: UlsMetric; pctGrave: number | null };
+
+const SINCE_ULS = "2024-01"; // as ULS só existem com este nome no SICO desde 2024
+
+export async function fetchUlsNorte(today: string): Promise<UlsRow[]> {
+  const mesAtual = today.slice(0, 7);
+  const likeNorte = ULS_NORTE.map((u) => `instituicao_de_saude LIKE "${u.match.source.replace("Saúde de ", "")}"`).join(" OR ");
+  const qObitos = new URLSearchParams({
+    where: `data_certificacao >= date'${SINCE_ULS}-01' AND (${likeNorte})`,
+    select: "data_certificacao,instituicao_de_saude,mortalidade_mensal_por_instituicao_quantidade_1",
+  });
+  const qUrg = new URLSearchParams({ where: `tempo >= "${SINCE_ULS}" AND regiao LIKE "Norte"`, select: "tempo,instituicao,total_urgencias" });
+  const qTri = new URLSearchParams({ where: `tempo >= "${SINCE_ULS}" AND regiao LIKE "Norte"` });
+  type R = Record<string, string | number>;
+  const [obitos, urg, tri] = await Promise.all([
+    getJSON<R[]>(`${SNS}/certificados-de-obito-por-instituicao-de-saude/exports/json?${qObitos}`),
+    getJSON<R[]>(`${SNS}/atendimentos-por-tipo-de-urgencia-hospitalar-link/exports/json?${qUrg}`),
+    getJSON<R[]>(`${SNS}/atendimentos-em-urgencia-triagem-manchester/exports/json?${qTri}`),
+  ]);
+
+  const obitosUls = groupByUls(
+    obitos.map((r) => ({ instituicao: String(r.instituicao_de_saude), mes: String(r.data_certificacao).slice(0, 7), valor: Number(r.mortalidade_mensal_por_instituicao_quantidade_1) })),
+    mesAtual
+  );
+  // Urgências e triagem vêm acumuladas no ano, por ULS: agrupar primeiro, depois converter em mensais.
+  const urgUls = groupByUls(urg.map((r) => ({ instituicao: String(r.instituicao), mes: String(r.tempo), valor: Number(r.total_urgencias) })), mesAtual);
+  const t = (r: R, k: string) => Number(r[`no_de_atendimentos_em_urgencia_su_triagem_manchester_${k}`] ?? 0);
+  const graveUls = groupByUls(tri.map((r) => ({ instituicao: String(r.instituicao), mes: String(r.tempo), valor: t(r, "vermelha") + t(r, "laranja") })), mesAtual);
+  const totalTriUls = groupByUls(
+    tri.map((r) => ({ instituicao: String(r.instituicao), mes: String(r.tempo), valor: ["vermelha", "laranja", "amarela", "verde", "azul", "branca"].reduce((s, k) => s + t(r, k), 0) })),
+    mesAtual
+  );
+  const monthly = (m: Map<string, { mes: string; valor: number }[]>, k: string) => decumulate(m.get(k) ?? [], ["valor"]);
+
+  return ULS_NORTE.map((u) => {
+    const grave = monthly(graveUls, u.key).at(-1);
+    const total = monthly(totalTriUls, u.key).at(-1);
+    return {
+      key: u.key, nome: u.nome, lat: u.lat, lon: u.lon,
+      obitos: compareHomologous(obitosUls.get(u.key) ?? [], "poisson"),
+      urgencias: compareHomologous(monthly(urgUls, u.key), "pct"),
+      pctGrave: grave && total?.valor && grave.mes === total.mes ? (grave.valor / total.valor) * 100 : null,
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */
