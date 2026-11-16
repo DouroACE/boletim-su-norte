@@ -1,11 +1,13 @@
 import {
-  REVALIDATE, fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchManchester, fetchIpmaForecast, fetchIpmaAvisos, fetchMeteoPorto, safe,
+  REVALIDATE, fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchManchester, fetchIpmaForecast, fetchIpmaAvisos, fetchMeteoPorto, fetchUlsNorte, safe,
   type Point, type SourceStatus,
 } from "@/lib/sources";
-import { computeFlag, seasonOf, seasonalBaseline, rolling, dayOfSeason, addDays, worstLevel, type Flag } from "@/lib/stats";
+import { seasonOf, seasonalBaseline, rolling, dayOfSeason, addDays, worstLevel, type Flag } from "@/lib/stats";
 import { analyseLocal, local } from "@/lib/local";
 import { aiSummary } from "@/lib/ai";
+import { regionalFlags, historySince } from "@/lib/flags";
 import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, fmt, fmtDate } from "@/components/ui";
+import { UlsMap } from "@/components/uls-map";
 import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, type SeasonRow } from "@/components/charts";
 
 export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinha com dados novos
@@ -15,13 +17,6 @@ const INSTITUICAO = process.env.INSTITUICAO_SNS || "Unidade Local de Saúde de S
 const SNS_URL = "https://transparencia.sns.gov.pt/explore/dataset/";
 
 const lastOf = (p: Point[] | null | undefined) => p?.at(-1)?.date;
-
-function stale(flag: Flag, today: string, maxDays = 21): Flag {
-  if (!flag.lastDate) return flag;
-  const age = (Date.parse(today) - Date.parse(flag.lastDate)) / 864e5;
-  if (age <= maxDays) return flag;
-  return { ...flag, level: "sem-dados", note: `Último dado publicado a ${fmtDate(flag.lastDate)} (índice sazonal ou publicação suspensa). ${flag.note}` };
-}
 
 function seasonRows(points: Point[], seasonStart: number): SeasonRow[] {
   const smooth = rolling(points, 7);
@@ -54,10 +49,10 @@ export default async function Page() {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const season = seasonOf(today);
-  const since = addDays(`${season.start - 5}-10-01`, -10);
+  const since = historySince(today);
   const sinceShort = `${season.start - 1}-10-01`;
 
-  const [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo] = await Promise.all([
+  const [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo, uls] = await Promise.all([
     safe({ id: "sns-urg", name: "SNS Transparência — Vigilância sazonal das urgências (diário)", url: `${SNS_URL}atividade-sindrome-gripal-csh/` }, () => fetchNorte(since, REGIAO), (v) => lastOf(v.episodios)),
     safe({ id: "friesa", name: "Índice FRIESA — impacto do frio, Porto (INSA)", url: `${SNS_URL}indice-friesa/` }, () => fetchFriesaPorto(since), (v) => lastOf(v.mais65)),
     safe({ id: "icaro", name: "Índice ÍCARO — impacto do calor (INSA)", url: `${SNS_URL}evolucao-diaria-do-indice-icaro/` }, () => fetchIcaro(sinceShort), lastOf),
@@ -66,17 +61,12 @@ export default async function Page() {
     safe({ id: "ipma-prev", name: "IPMA — Previsão diária, Porto", url: "https://api.ipma.pt/" }, () => fetchIpmaForecast(), (v) => v[0]?.date),
     safe({ id: "ipma-avisos", name: "IPMA — Avisos meteorológicos, distritos do Norte", url: "https://www.ipma.pt/pt/otempo/prev-sam/" }, () => fetchIpmaAvisos(), () => today),
     safe({ id: "meteo", name: "Open-Meteo — Temperatura observada e prevista, Porto", url: "https://open-meteo.com/" }, () => fetchMeteoPorto(), () => today),
+    safe({ id: "uls", name: "SICO por instituição e urgências por ULS — Região Norte (mensal)", url: `${SNS_URL}certificados-de-obito-por-instituicao-de-saude/` }, () => fetchUlsNorte(today), (v) => v.map((r) => r.obitos.mes ?? "").sort().at(-1)),
   ]);
 
   const N = norte.value;
-  const flags: Flag[] = [
-    stale(computeFlag("episodios", "Episódios de urgência por dia", "episódios", N?.episodios ?? []), today),
-    stale(computeFlag("resp", "Urgências com infeção respiratória", "%", N?.pctRespiratoria ?? []), today),
-    stale(computeFlag("internamento", "Urgências com internamento", "%", N?.pctInternamento ?? []), today),
-    stale(computeFlag("triagem", "Espera triagem → 1.ª observação", "min", N?.tempoTriagem ?? []), today),
-    stale(computeFlag("friesa", "Índice de frio FRIESA (Porto, 65+)", "", friesa.value?.mais65 ?? []), today),
-    stale(computeFlag("obitos", "Óbitos certificados por dia (Portugal)", "óbitos", obitos.value ?? []), today, 30),
-  ];
+  const U = uls.value ?? [];
+  const flags: Flag[] = regionalFlags(N, friesa.value?.mais65 ?? [], obitos.value ?? [], today);
   const series: Record<string, Point[]> = {
     episodios: N?.episodios ?? [],
     resp: N?.pctRespiratoria ?? [],
@@ -89,7 +79,7 @@ export default async function Page() {
   const L = analyseLocal();
   const av = avisos.value ?? [];
   const summary = await aiSummary(flags, av, L?.patterns ?? []);
-  const statuses: SourceStatus[] = [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo].map((s) => s.status);
+  const statuses: SourceStatus[] = [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo, uls].map((s) => s.status);
   statuses.push({ id: "excel", name: `Dados locais do SU (${local.source})`, url: "#local", ok: !!L, lastDate: L?.last });
 
   const epiRows = N ? seasonRows(N.episodios, season.start) : [];
@@ -122,9 +112,11 @@ export default async function Page() {
             <li><a href="#resumo">Resumo</a></li>
             <li><a href="#indicadores">Indicadores</a></li>
             <li><a href="#tendencias">Tendências</a></li>
+            <li><a href="#mapa">Mapa por ULS</a></li>
             <li><a href="#meteorologia">Meteorologia</a></li>
             <li><a href="#local">Dados locais do SU</a></li>
             <li><a href="#metodologia">Metodologia e fontes</a></li>
+            <li><a href="/flags-ia">Flags de IA →</a></li>
           </ul>
         </div>
       </nav>
@@ -223,9 +215,57 @@ export default async function Page() {
           {manchester.value && manchester.value.length > 0 && (
             <article className="card" style={{ marginTop: 16 }}>
               <h3>Atendimentos mensais por prioridade de triagem · {INSTITUICAO.replace(", EPE", "")}</h3>
-              <p className="hint">Triagem de Manchester. Publicação mensal, com alguns meses de atraso; valores tal como publicados (meses incompletos podem surgir mais baixos).</p>
+              <p className="hint">Triagem de Manchester. Publicação mensal, com alguns meses de atraso. A SPMS publica totais acumulados no ano; aqui estão convertidos em valores mensais.</p>
               <ManchesterChart data={manchester.value} />
             </article>
+          )}
+        </section>
+
+        {/* MAPA POR ULS */}
+        <section id="mapa" aria-labelledby="h-mapa">
+          <div className="section-head">
+            <h2 id="h-mapa">Mapa por ULS · Região Norte</h2>
+            <p>Último mês publicado de óbitos certificados (SICO, por instituição) e de atendimentos em urgência, comparados com o mesmo mês do ano anterior. A SPMS só publica estes dados por mês; o boletim verifica-os todos os dias.</p>
+          </div>
+          {U.length ? (
+            <div className="grid g-map">
+              <article className="card">
+                <UlsMap rows={U} />
+              </article>
+              <article className="card table-card">
+                <h3>Indicadores por ULS</h3>
+                <div className="table-wrap">
+                  <table className="uls-table">
+                    <caption className="sr-only">Óbitos e urgências por ULS no último mês publicado</caption>
+                    <thead>
+                      <tr><th scope="col">ULS</th><th scope="col">Óbitos (SICO)</th><th scope="col">Urgências</th><th scope="col">Triagem V+L</th></tr>
+                    </thead>
+                    <tbody>
+                      {U.map((r) => (
+                        <tr key={r.key}>
+                          <th scope="row">{r.nome}</th>
+                          {[r.obitos, r.urgencias].map((m, i) => (
+                            <td key={i}>
+                              <span className="num">{fmt(m.valor)}</span>
+                              {m.varPct != null && <small> {m.varPct >= 0 ? "▲" : "▼"} {fmt(Math.abs(m.varPct), 0)}%</small>}
+                              {" "}<Chip level={m.level} />
+                            </td>
+                          ))}
+                          <td>{r.pctGrave != null ? `${fmt(r.pctGrave, 1)}%` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="hint">
+                  Óbitos: {U[0].obitos.mes ? fmtDate(`${U[0].obitos.mes}-15`, { month: "long", year: "numeric" }) : "—"} · Urgências: {U[0].urgencias.mes ? fmtDate(`${U[0].urgencias.mes}-15`, { month: "long", year: "numeric" }) : "—"}.
+                  Variação face ao mesmo mês do ano anterior. V+L = % de atendimentos com triagem vermelha ou laranja.
+                  Os óbitos SICO contam só os certificados emitidos nas unidades da ULS (sobretudo óbitos hospitalares), não a residência.
+                </p>
+              </article>
+            </div>
+          ) : (
+            <p className="hint">Fonte indisponível neste momento.</p>
           )}
         </section>
 
@@ -371,6 +411,8 @@ export default async function Page() {
               <p><b>Níveis.</b> z = (média dos últimos 7 dias − média esperada) ÷ desvio-padrão. <b>Normal</b> se z &lt; 1; <b>Atenção</b> se 1 ≤ z &lt; 2; <b>Alerta</b> se z ≥ 2. Indicadores sem dados recentes aparecem como “Sem dados”.</p>
               <p><b>Dados locais.</b> Um dia é anómalo quando o número de episódios ultrapassa a média + 2 desvios-padrão para o mesmo dia da semana. A associação entre temperatura e infeções respiratórias usa a correlação de Pearson com desfasamentos de 0 a 14 dias.</p>
               <p><b>Inteligência artificial.</b> Um modelo de linguagem open-source (Llama 3.3 ou Qwen 2.5) recebe apenas os números já calculados e redige a síntese. A IA não decide níveis de alerta. Sem chave de API configurada, o texto é gerado por regras.</p>
+              <p><b>Mapa por ULS.</b> Óbitos: contagem mensal de certificados SICO por instituição, somada por ULS; o nível usa um teste de Poisson face ao mesmo mês do ano anterior (<b>Atenção</b> z ≥ 2, <b>Alerta</b> z ≥ 3). Urgências: a SPMS publica valores acumulados no ano, convertidos aqui em mensais; <b>Atenção</b> ≥ +10 %, <b>Alerta</b> ≥ +20 % face ao mesmo mês. O mês corrente (incompleto) é ignorado.</p>
+              <p><b>Atualização.</b> Além do ISR de 3 em 3 horas, um cron diário da Vercel (07:00 UTC) invalida o cache e volta a recolher todas as fontes.</p>
               <p><b>Limitações.</b> Os dados do SNS Transparência são provisórios e podem ser revistos. Os índices FRIESA e ÍCARO são sazonais. A correlação não implica causalidade.</p>
             </div>
           </details>

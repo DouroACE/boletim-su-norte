@@ -195,3 +195,35 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
   body { background: #fff; }
   .card, .status, .pattern { break-inside: avoid; box-shadow: none; }
 }
+
+/* Mapa por ULS */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.g-map { grid-template-columns: 1fr; }
+@media (min-width: 1100px) { .g-map { grid-template-columns: 3fr 2fr; align-items: start; } }
+.uls-map { display: grid; gap: 12px; }
+/* isolation: contém os z-index do Leaflet para não tapar a navegação fixa */
+.map { height: 460px; border-radius: 8px; border: 1px solid var(--line); position: relative; isolation: isolate; z-index: 0; background: var(--surface-2); }
+@media (prefers-color-scheme: dark) { .map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9); } }
+.uls-dot { fill: var(--lv); stroke: var(--lv); }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 10px; justify-self: start; }
+.seg button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+.uls-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.uls-table th, .uls-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.uls-table thead th { color: var(--ink-3); font-size: 13px; }
+.uls-table tbody th { font-weight: 700; white-space: nowrap; }
+.uls-table td { white-space: nowrap; }
+.uls-table .num { font-weight: 700; font-variant-numeric: tabular-nums; }
+.uls-table small { color: var(--ink-3); }
+.uls-table .chip { font-size: 12px; padding: 1px 8px; }
+
+/* Página de flags de IA */
+.flags { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.flag { display: grid; gap: 8px; align-content: start; padding: 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); border-left: 4px solid var(--lv); }
+.flag h3 { font-size: 16px; }
+.flag p { font-size: 14px; color: var(--ink-2); }
+.flag .refs { display: flex; flex-wrap: wrap; gap: 4px; }
+.flag .refs code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--ink-3); }
+.inputs { width: 100%; border-collapse: collapse; font-size: 13px; }
+.inputs td, .inputs th { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }

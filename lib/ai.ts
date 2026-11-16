@@ -1,7 +1,7 @@
 // Resumo em linguagem natural gerado por um modelo open-source (Llama / Qwen), em planos gratuitos.
 // Ordem: GROQ_API_KEY (Llama 3.3 70B) → HF_TOKEN (Qwen 2.5 72B, Hugging Face Inference) → texto automático.
 // O modelo recebe APENAS os números já calculados e é instruído a não inventar valores.
-import type { Flag } from "./stats";
+import type { Flag, Level } from "./stats";
 import type { Pattern } from "./local";
 import type { Aviso } from "./sources";
 
@@ -24,16 +24,16 @@ function buildPrompt(flags: Flag[], avisos: Aviso[], patterns: Pattern[]) {
   return `Indicadores regionais (ARS Norte, SNS Transparência) e índices de temperatura:\n${f}\n\nAvisos IPMA (distritos do Norte):\n${a}\n\nPadrões nos dados locais do SU (época anterior):\n${p}\n\nRedige a síntese "Padrões e sinais da semana".`;
 }
 
-async function chat(url: string, key: string, model: string, prompt: string) {
+async function chat(url: string, key: string, model: string, prompt: string, system = SYSTEM, maxTokens = 500) {
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 500,
+      max_tokens: maxTokens,
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: system },
         { role: "user", content: prompt },
       ],
     }),
@@ -71,23 +71,95 @@ export function ruleBasedSummary(allFlags: Flag[], avisos: Aviso[]): string[] {
   return lines.slice(0, 6);
 }
 
+/** Corre o prompt no primeiro fornecedor configurado (Groq → Hugging Face). Devolve null sem chave. */
+async function runLLM(prompt: string, system?: string, maxTokens?: number): Promise<{ text: string; model: string } | null> {
+  if (process.env.GROQ_API_KEY) {
+    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    return { text: await chat("https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, model, prompt, system, maxTokens), model };
+  }
+  if (process.env.HF_TOKEN) {
+    const model = process.env.HF_MODEL || "Qwen/Qwen2.5-72B-Instruct";
+    return { text: await chat("https://router.huggingface.co/v1/chat/completions", process.env.HF_TOKEN, model, prompt, system, maxTokens), model };
+  }
+  return null;
+}
+
 export async function aiSummary(flags: Flag[], avisos: Aviso[], patterns: Pattern[]): Promise<AiSummary> {
   const prompt = buildPrompt(flags, avisos, patterns);
   try {
-    if (process.env.GROQ_API_KEY) {
-      const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-      const t = await chat("https://api.groq.com/openai/v1/chat/completions", process.env.GROQ_API_KEY, model, prompt);
-      const lines = toLines(t);
-      if (lines.length) return { text: lines, model, generated: "ia" };
-    }
-    if (process.env.HF_TOKEN) {
-      const model = process.env.HF_MODEL || "Qwen/Qwen2.5-72B-Instruct";
-      const t = await chat("https://router.huggingface.co/v1/chat/completions", process.env.HF_TOKEN, model, prompt);
-      const lines = toLines(t);
-      if (lines.length) return { text: lines, model, generated: "ia" };
-    }
+    const r = await runLLM(prompt);
+    const lines = r ? toLines(r.text) : [];
+    if (r && lines.length) return { text: lines, model: r.model, generated: "ia" };
   } catch (e) {
     console.error("[ai] falhou, a usar texto automático:", (e as Error).message);
   }
   return { text: ruleBasedSummary(flags, avisos), model: "regras estatísticas", generated: "regras" };
+}
+
+/* ------------------------------------------------------------------ */
+/* Flags de IA — o modelo propõe sinais; o código valida e fixa o nível  */
+/* ------------------------------------------------------------------ */
+
+/** Um indicador que a IA pode citar. O nível vem sempre das regras estatísticas. */
+export type Indicator = { id: string; label: string; level: Level; detail: string };
+export type AiFlag = { indicadores: string[]; level: Level | "info"; titulo: string; evidencia: string; investigar: string };
+export type AiFlagsResult = { flags: AiFlag[]; model: string; generated: "ia" | "regras"; error?: string };
+
+const FLAGS_SYSTEM = `És um epidemiologista de uma Unidade de Saúde Pública do Norte de Portugal a rever dados de vigilância.
+Recebes indicadores, cada um com um id entre parênteses retos, o nível estatístico já calculado e os números.
+Propõe até 8 "flags": sinais que merecem atenção, incluindo padrões que só se veem cruzando indicadores
+(ex.: várias ULS vizinhas a subir ao mesmo tempo, óbitos a subir com o frio).
+Regras: usa só os números fornecidos; não inventes valores nem causas; cada flag cita os ids exatos em que se baseia;
+escreve em português europeu, frases curtas. Responde APENAS com JSON:
+{"flags":[{"indicadores":["id1","id2"],"titulo":"...","evidencia":"números que sustentam a flag","investigar":"o que a equipa deve verificar"}]}`;
+
+const clip = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
+const RANK: Record<Level, number> = { "sem-dados": -1, normal: 0, atencao: 1, alerta: 2 };
+
+/** Valida a resposta do modelo: só aceita flags que citam ids conhecidos; o nível é o pior das regras citadas. */
+export function parseAiFlags(text: string, indicators: Indicator[]): AiFlag[] {
+  const byId = new Map(indicators.map((i) => [i.id, i]));
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  const list = (raw as { flags?: unknown }).flags;
+  if (!Array.isArray(list)) return [];
+  const out: AiFlag[] = [];
+  for (const f of list.slice(0, 8)) {
+    const ids = Array.isArray(f?.indicadores) ? [...new Set<string>(f.indicadores.map(String))].filter((id) => byId.has(id)) : [];
+    const titulo = clip(f?.titulo, 140);
+    if (!ids.length || !titulo) continue;
+    const worst = ids.map((id) => byId.get(id)!.level).reduce((w, l) => (RANK[l] > RANK[w] ? l : w), "sem-dados" as Level);
+    out.push({ indicadores: ids, level: RANK[worst] >= 1 ? worst : "info", titulo, evidencia: clip(f?.evidencia, 600), investigar: clip(f?.investigar, 400) });
+  }
+  return out;
+}
+
+export function ruleFlags(indicators: Indicator[]): AiFlag[] {
+  return indicators
+    .filter((i) => i.level === "alerta" || i.level === "atencao")
+    .sort((a, b) => RANK[b.level] - RANK[a.level])
+    .map((i) => ({ indicadores: [i.id], level: i.level, titulo: i.label, evidencia: i.detail, investigar: "" }));
+}
+
+export async function aiFlags(indicators: Indicator[], avisos: Aviso[]): Promise<AiFlagsResult> {
+  const lines = indicators.map((i) => `• [${i.id}] ${i.label} — nível ${i.level}. ${i.detail}`).join("\n");
+  const a = avisos.length ? avisos.map((x) => `• ${x.distrito}: ${x.tipo} (${x.nivel})`).join("\n") : "• Sem avisos.";
+  const prompt = `Indicadores:\n${lines}\n\nAvisos IPMA (distritos do Norte):\n${a}`;
+  try {
+    const r = await runLLM(prompt, FLAGS_SYSTEM, 1200);
+    if (r) {
+      const flags = parseAiFlags(r.text, indicators);
+      if (flags.length) return { flags, model: r.model, generated: "ia" };
+      return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras", error: "A resposta da IA não trouxe flags válidas." };
+    }
+  } catch (e) {
+    console.error("[ai-flags] falhou, a usar regras:", (e as Error).message);
+    return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras", error: (e as Error).message };
+  }
+  return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras" };
 }
