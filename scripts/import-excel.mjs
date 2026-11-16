@@ -3,7 +3,7 @@
 // basta substituir o ficheiro Excel no repositório: a Vercel volta a construir a página.
 import fs from "node:fs";
 import path from "node:path";
-import XLSX from "xlsx";
+import { readSheet } from "read-excel-file/node";
 
 const root = path.dirname(path.dirname(new URL(import.meta.url).pathname));
 const src = path.join(root, "data", "su-local.xlsx");
@@ -75,9 +75,8 @@ if (!fs.existsSync(src)) {
   process.exit(0);
 }
 
-const wb = XLSX.readFile(src);
-const ws = wb.Sheets[wb.SheetNames[0]];
-const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+// Primeira folha do ficheiro; datas chegam como objetos Date, números como number
+const rows = await readSheet(src);
 const header = rows[0].map(norm);
 const keys = header.map((h) => {
   const hit = MAP.find(([prefix]) => h.startsWith(prefix));

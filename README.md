@@ -44,4 +44,6 @@ npm install
 npm run dev
 ```
 
+Dependências sem vulnerabilidades conhecidas (`npm audit`: 0). O `postcss` usado pelo Next.js é forçado para a versão corrigida via `overrides`.
+
 O sistema de design (Swiss minimal, Atkinson Hyperlegible, tokens com modo escuro e contraste AA) foi gerado com a skill `ui-ux-pro-max`.
