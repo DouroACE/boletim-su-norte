@@ -163,3 +163,43 @@ export function pearson(x: number[], y: number[]) {
 export const levelRank: Record<Level, number> = { "sem-dados": -1, normal: 0, atencao: 1, alerta: 2 };
 export const worstLevel = (flags: Flag[]): Level =>
   flags.reduce<Level>((w, f) => (levelRank[f.level] > levelRank[w] ? f.level : w), "normal");
+
+export type RangeFlag = Flag & { years: number };
+
+/** Flag para um intervalo [from, to]: a média do intervalo é comparada com a média do mesmo período
+ *  (mesmas datas) em cada um dos 5 anos anteriores. z = (atual − média dos anos) ÷ DP dos anos.
+ *  Um único z por intervalo, para não multiplicar falsos alertas em intervalos longos. */
+export function rangeFlag(id: string, label: string, unit: string, points: Point[], from: string, to: string, nYears = 5): RangeFlag {
+  const avg = (a: string, b: string, minCover = 0) => {
+    const v = points.filter((p) => p.date >= a && p.date <= b).map((p) => p.value);
+    const span = Math.round((toTime(b) - toTime(a)) / 864e5) + 1;
+    return v.length && v.length >= span * minCover ? mean(v) : null;
+  };
+  const inRange = points.filter((p) => p.date >= from && p.date <= to);
+  if (!inRange.length) {
+    return {
+      id, label, unit, current: null, previous: null, changePct: null, baselineMean: null, baselineSd: null,
+      z: null, level: "sem-dados", lastDate: null, direction: "up-bad", note: "Sem dados no intervalo escolhido.", years: 0,
+    };
+  }
+  const span = Math.round((toTime(to) - toTime(from)) / 864e5) + 1;
+  const current = mean(inRange.map((p) => p.value));
+  const previous = avg(addDays(from, -span), addDays(from, -1));
+  const changePct = previous ? ((current - previous) / previous) * 100 : null;
+
+  const shift = (iso: string, k: number) => `${Number(iso.slice(0, 4)) - k}${iso.slice(4)}`.replace("-02-29", "-02-28");
+  const past = Array.from({ length: nYears }, (_, i) => avg(shift(from, i + 1), shift(to, i + 1), 0.5)).filter((v): v is number => v != null);
+  const ok = past.length >= 3 && sd(past) > 0;
+  const z = ok ? (current - mean(past)) / sd(past) : null;
+
+  const dir = changePct == null ? "sem período anterior para comparar" : `${changePct >= 0 ? "subiu" : "desceu"} ${Math.abs(changePct).toFixed(1)}% face aos ${span} dias anteriores`;
+  const vsBase = ok
+    ? `${current >= mean(past) ? "acima" : "abaixo"} da média do mesmo período nos ${past.length} anos anteriores (${mean(past).toFixed(1)} ${unit}; z = ${z!.toFixed(2)})`
+    : "sem anos anteriores suficientes para comparar";
+  return {
+    id, label, unit, current, previous, changePct,
+    baselineMean: ok ? mean(past) : null, baselineSd: ok ? sd(past) : null,
+    z, level: levelFromZ(z, "up-bad"), lastDate: inRange.at(-1)!.date, direction: "up-bad", years: past.length,
+    note: `Média de ${from} a ${to}: ${current.toFixed(1)} ${unit}; ${dir}; ${vsBase}.`,
+  };
+}

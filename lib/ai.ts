@@ -151,10 +151,10 @@ export function ruleFlags(indicators: Indicator[]): AiFlag[] {
     .map((i) => ({ indicadores: [i.id], level: i.level, titulo: i.label, evidencia: i.detail, investigar: "" }));
 }
 
-export async function aiFlags(indicators: Indicator[], avisos: Aviso[]): Promise<AiFlagsResult> {
+export async function aiFlags(indicators: Indicator[], avisos: Aviso[], periodo = "últimos 7 dias"): Promise<AiFlagsResult> {
   const lines = indicators.map((i) => `• [${i.id}] ${i.label} — nível ${i.level}. ${i.detail}`).join("\n");
   const a = avisos.length ? avisos.map((x) => `• ${x.distrito}: ${x.tipo} (${x.nivel})`).join("\n") : "• Sem avisos.";
-  const prompt = `Indicadores:\n${lines}\n\nAvisos IPMA (distritos do Norte):\n${a}`;
+  const prompt = `Período analisado: ${periodo}.\n\nIndicadores:\n${lines}\n\nAvisos IPMA (distritos do Norte):\n${a}`;
   try {
     const r = await runLLM(prompt, FLAGS_SYSTEM, 1200);
     if (r) {

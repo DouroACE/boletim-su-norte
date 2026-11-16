@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { fetchNorte, fetchFriesaPorto, fetchObitos, fetchIpmaAvisos, fetchUlsNorte } from "@/lib/sources";
-import { regionalFlags, historySince, toIndicators } from "@/lib/flags";
+import { regionalFlags, historySince, toIndicators, parseRange, rangeQuery } from "@/lib/flags";
+import { DateFilter } from "@/components/date-filter";
 import { aiFlags, ruleFlags } from "@/lib/ai";
 import { Chip, LEVEL_TEXT } from "@/components/ui";
 
@@ -11,19 +12,21 @@ const REGIAO = process.env.REGIAO_ARS || "ARS Norte";
 // Uma fonte em baixo não deve apagar a página: devolve o valor por omissão.
 const orNull = <T,>(p: Promise<T>) => p.catch(() => null);
 
-export default async function FlagsPage() {
+export default async function FlagsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-  const since = historySince(today);
+  const range = parseRange(await searchParams, today);
+  const since = historySince(range?.from ?? today);
   const [norte, friesa, obitos, avisos, uls] = await Promise.all([
     orNull(fetchNorte(since, REGIAO)),
     orNull(fetchFriesaPorto(since)),
     orNull(fetchObitos(since)),
     orNull(fetchIpmaAvisos()),
-    orNull(fetchUlsNorte(today)),
+    orNull(fetchUlsNorte(today, range?.to)),
   ]);
-  const indicators = toIndicators(regionalFlags(norte, friesa?.mais65 ?? [], obitos ?? [], today), uls ?? []);
-  const result = await aiFlags(indicators, avisos ?? []);
+  const indicators = toIndicators(regionalFlags(norte, friesa?.mais65 ?? [], obitos ?? [], today, range), uls ?? []);
+  const isCurrent = !range || range.to >= today;
+  const result = await aiFlags(indicators, isCurrent ? avisos ?? [] : [], range ? `de ${range.from} a ${range.to}` : "últimos 7 dias");
   const stat = ruleFlags(indicators);
   const label = new Map(indicators.map((i) => [i.id, i.label]));
 
@@ -47,7 +50,7 @@ export default async function FlagsPage() {
       <nav className="toc" aria-label="Navegação">
         <div className="wrap">
           <ul>
-            <li><a href="/">← Boletim</a></li>
+            <li><a href={`/${rangeQuery(range)}`}>← Boletim</a></li>
             <li><a href="#ia">Flags propostas</a></li>
             <li><a href="#regras">Flags estatísticas</a></li>
             <li><a href="#dados">Dados enviados à IA</a></li>
@@ -56,6 +59,8 @@ export default async function FlagsPage() {
       </nav>
 
       <main id="conteudo" className="wrap">
+        <DateFilter range={range} today={today} path="/flags-ia" />
+
         <section id="ia" aria-labelledby="h-ia">
           <div className="section-head">
             <h2 id="h-ia">{result.generated === "ia" ? "Flags propostas pela IA" : "Flags (IA indisponível)"}</h2>

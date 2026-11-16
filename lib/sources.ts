@@ -122,8 +122,12 @@ export type UlsRow = { key: string; nome: string; lat: number; lon: number; obit
 
 const SINCE_ULS = "2024-01"; // as ULS só existem com este nome no SICO desde 2024
 
-export async function fetchUlsNorte(today: string): Promise<UlsRow[]> {
-  const mesAtual = today.slice(0, 7);
+/** `until` (AAAA-MM-DD) limita aos meses até essa data, para o filtro de datas; por omissão, até hoje. */
+export async function fetchUlsNorte(today: string, until = today): Promise<UlsRow[]> {
+  const next = new Date(`${until.slice(0, 7)}-01T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  // groupByUls guarda os meses < mesAtual: o mês corrente (incompleto) ou o mês a seguir ao fim do intervalo
+  const mesAtual = [next.toISOString().slice(0, 7), today.slice(0, 7)].sort()[0];
   const likeNorte = ULS_NORTE.map((u) => `instituicao_de_saude LIKE "${u.match.source.replace("Saúde de ", "")}"`).join(" OR ");
   const qObitos = new URLSearchParams({
     where: `data_certificacao >= date'${SINCE_ULS}-01' AND (${likeNorte})`,
