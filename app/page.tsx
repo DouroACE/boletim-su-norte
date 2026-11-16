@@ -5,7 +5,8 @@ import {
 import { seasonOf, seasonalBaseline, rolling, dayOfSeason, addDays, worstLevel, type Flag } from "@/lib/stats";
 import { analyseLocal, local } from "@/lib/local";
 import { aiSummary } from "@/lib/ai";
-import { regionalFlags, historySince } from "@/lib/flags";
+import { regionalFlags, historySince, parseRange, rangeQuery, type Range } from "@/lib/flags";
+import { DateFilter } from "@/components/date-filter";
 import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, fmt, fmtDate } from "@/components/ui";
 import { UlsMap } from "@/components/uls-map";
 import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, type SeasonRow } from "@/components/charts";
@@ -18,7 +19,7 @@ const SNS_URL = "https://transparencia.sns.gov.pt/explore/dataset/";
 
 const lastOf = (p: Point[] | null | undefined) => p?.at(-1)?.date;
 
-function seasonRows(points: Point[], seasonStart: number): SeasonRow[] {
+function seasonRows(points: Point[], seasonStart: number, range: Range | null): SeasonRow[] {
   const smooth = rolling(points, 7);
   const base = seasonalBaseline(points, seasonStart, 5);
   const cur = new Map<number, number>();
@@ -29,8 +30,9 @@ function seasonRows(points: Point[], seasonStart: number): SeasonRow[] {
     if (s === seasonStart - 1) prev.set(dayOfSeason(p.date), p.value);
   }
   const start = `${seasonStart}-10-01`;
-  // Mostra o semestre de inverno (1 out → 31 mar), onde se concentra a atividade sazonal
-  return base.days.slice(0, 182).map((b) => {
+  // Sem filtro: semestre de inverno (1 out → 31 mar), onde se concentra a atividade sazonal. Com filtro: só o intervalo.
+  const days = range ? base.days.filter((b) => { const d = addDays(start, b.dos); return d >= range.from && d <= range.to; }) : base.days.slice(0, 182);
+  return days.map((b) => {
     const ok = b.n >= 10 && Number.isFinite(b.sd);
     return {
       label: fmtDate(addDays(start, b.dos), { day: "numeric", month: "short" }),
@@ -45,11 +47,14 @@ function seasonRows(points: Point[], seasonStart: number): SeasonRow[] {
 const AVISO_COR: Record<string, string> = { yellow: "#e3b505", orange: "#e06c1b", red: "#c0262d" };
 const AVISO_TXT: Record<string, string> = { yellow: "Amarelo", orange: "Laranja", red: "Vermelho" };
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-  const season = seasonOf(today);
-  const since = historySince(today);
+  const range = parseRange(await searchParams, today);
+  const inRange = (pts: Point[]) => (range ? pts.filter((p) => p.date >= range.from && p.date <= range.to) : pts);
+  const isCurrent = !range || range.to >= today; // avisos e previsão do IPMA só fazem sentido para o presente
+  const season = seasonOf(range?.to ?? today);
+  const since = historySince(range?.from ?? today);
   const sinceShort = `${season.start - 1}-10-01`;
 
   const [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo, uls] = await Promise.all([
@@ -61,12 +66,12 @@ export default async function Page() {
     safe({ id: "ipma-prev", name: "IPMA — Previsão diária, Porto", url: "https://api.ipma.pt/" }, () => fetchIpmaForecast(), (v) => v[0]?.date),
     safe({ id: "ipma-avisos", name: "IPMA — Avisos meteorológicos, distritos do Norte", url: "https://www.ipma.pt/pt/otempo/prev-sam/" }, () => fetchIpmaAvisos(), () => today),
     safe({ id: "meteo", name: "Open-Meteo — Temperatura observada e prevista, Porto", url: "https://open-meteo.com/" }, () => fetchMeteoPorto(), () => today),
-    safe({ id: "uls", name: "SICO por instituição e urgências por ULS — Região Norte (mensal)", url: `${SNS_URL}certificados-de-obito-por-instituicao-de-saude/` }, () => fetchUlsNorte(today), (v) => v.map((r) => r.obitos.mes ?? "").sort().at(-1)),
+    safe({ id: "uls", name: "SICO por instituição e urgências por ULS — Região Norte (mensal)", url: `${SNS_URL}certificados-de-obito-por-instituicao-de-saude/` }, () => fetchUlsNorte(today, range?.to), (v) => v.map((r) => r.obitos.mes ?? "").sort().at(-1)),
   ]);
 
   const N = norte.value;
   const U = uls.value ?? [];
-  const flags: Flag[] = regionalFlags(N, friesa.value?.mais65 ?? [], obitos.value ?? [], today);
+  const flags: Flag[] = regionalFlags(N, friesa.value?.mais65 ?? [], obitos.value ?? [], today, range);
   const series: Record<string, Point[]> = {
     episodios: N?.episodios ?? [],
     resp: N?.pctRespiratoria ?? [],
@@ -77,14 +82,15 @@ export default async function Page() {
   };
   const level = worstLevel(flags);
   const L = analyseLocal();
-  const av = avisos.value ?? [];
+  const av = isCurrent ? avisos.value ?? [] : [];
   const summary = await aiSummary(flags, av, L?.patterns ?? []);
   const statuses: SourceStatus[] = [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteo, uls].map((s) => s.status);
   statuses.push({ id: "excel", name: `Dados locais do SU (${local.source})`, url: "#local", ok: !!L, lastDate: L?.last });
 
-  const epiRows = N ? seasonRows(N.episodios, season.start) : [];
-  const respRows = N ? seasonRows(N.pctRespiratoria, season.start) : [];
-  const icaroRecent = (icaro.value ?? []).filter((p) => p.date >= `${season.start - 1}-05-01`);
+  const epiRows = N ? seasonRows(N.episodios, season.start, range) : [];
+  const respRows = N ? seasonRows(N.pctRespiratoria, season.start, range) : [];
+  const icaroRecent = range ? inRange(icaro.value ?? []) : (icaro.value ?? []).filter((p) => p.date >= `${season.start - 1}-05-01`);
+  const meteoRange = range ? (meteo.value ?? []).filter((d) => d.date >= range.from && d.date <= range.to) : meteo.value;
 
   return (
     <>
@@ -116,12 +122,14 @@ export default async function Page() {
             <li><a href="#meteorologia">Meteorologia</a></li>
             <li><a href="#local">Dados locais do SU</a></li>
             <li><a href="#metodologia">Metodologia e fontes</a></li>
-            <li><a href="/flags-ia">Flags de IA →</a></li>
+            <li><a href={`/flags-ia${rangeQuery(range)}`}>Flags de IA →</a></li>
           </ul>
         </div>
       </nav>
 
       <main id="conteudo" className="wrap">
+        <DateFilter range={range} today={today} path="/" />
+
         {/* RESUMO */}
         <section id="resumo" aria-labelledby="h-resumo" className="grid">
           <h2 id="h-resumo" className="sr-only" style={{ position: "absolute", left: -9999 }}>Resumo</h2>
@@ -164,7 +172,7 @@ export default async function Page() {
         <section id="indicadores" aria-labelledby="h-ind">
           <div className="section-head">
             <h2 id="h-ind">Indicadores-chave · {REGIAO.replace("ARS ", "Região ")}</h2>
-            <p>Média dos últimos 7 dias comparada com a semana anterior e com as 5 épocas anteriores para a mesma altura do ano.</p>
+            <p>{range ? "Média do período escolhido, comparada com o período imediatamente anterior e com o mesmo período nos 5 anos anteriores." : "Média dos últimos 7 dias comparada com a semana anterior e com as 5 épocas anteriores para a mesma altura do ano."}</p>
           </div>
           <div className="grid g-kpi">
             {flags.map((f) => (
@@ -180,14 +188,14 @@ export default async function Page() {
                 <div className="kpi-delta">
                   {f.changePct != null ? (
                     <>
-                      <b>{f.changePct > 0 ? "▲" : "▼"} {fmt(Math.abs(f.changePct), 1)}%</b> vs. semana anterior
+                      <b>{f.changePct > 0 ? "▲" : "▼"} {fmt(Math.abs(f.changePct), 1)}%</b> vs. {range ? "período anterior" : "semana anterior"}
                     </>
                   ) : (
                     "—"
                   )}
                   {f.baselineMean != null && <> · esperado {fmt(f.baselineMean, f.unit === "%" || f.unit === "" ? 1 : 0)}</>}
                 </div>
-                <Sparkline values={series[f.id].slice(-60).map((p) => p.value)} label={`Evolução dos últimos 60 dias: ${f.label}`} />
+                <Sparkline values={(range ? inRange(series[f.id]) : series[f.id].slice(-60)).map((p) => p.value)} label={`Evolução ${range ? "no período escolhido" : "dos últimos 60 dias"}: ${f.label}`} />
                 <p className="kpi-note">{f.note}</p>
               </article>
             ))}
@@ -244,14 +252,14 @@ export default async function Page() {
                       {U.map((r) => (
                         <tr key={r.key}>
                           <th scope="row">{r.nome}</th>
-                          {[r.obitos, r.urgencias].map((m, i) => (
-                            <td key={i}>
+                          {([[r.obitos, "Óbitos (SICO)"], [r.urgencias, "Urgências"]] as const).map(([m, lbl]) => (
+                            <td key={lbl} data-label={lbl}>
                               <span className="num">{fmt(m.valor)}</span>
                               {m.varPct != null && <small> {m.varPct >= 0 ? "▲" : "▼"} {fmt(Math.abs(m.varPct), 0)}%</small>}
                               {" "}<Chip level={m.level} />
                             </td>
                           ))}
-                          <td>{r.pctGrave != null ? `${fmt(r.pctGrave, 1)}%` : "—"}</td>
+                          <td data-label="Triagem V+L">{r.pctGrave != null ? `${fmt(r.pctGrave, 1)}%` : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -293,7 +301,7 @@ export default async function Page() {
                   ))}
                 </ul>
               ) : (
-                <p className="hint" style={{ marginTop: 8 }}>Sem avisos amarelos, laranja ou vermelhos neste momento.</p>
+                <p className="hint" style={{ marginTop: 8 }}>{isCurrent ? "Sem avisos amarelos, laranja ou vermelhos neste momento." : "O IPMA não publica histórico de avisos: só aparecem quando o período inclui hoje."}</p>
               )}
               {forecast.value && (
                 <>
@@ -311,13 +319,13 @@ export default async function Page() {
               )}
             </article>
             <article className="card">
-              <h3>Temperatura no Porto · últimos 45 dias e próximos 7</h3>
-              {meteo.value ? <MeteoChart data={meteo.value} today={today} /> : <p className="hint">Fonte indisponível.</p>}
+              <h3>Temperatura no Porto · {range ? "período escolhido" : "últimos 45 dias e próximos 7"}</h3>
+              {meteoRange?.length ? <MeteoChart data={meteoRange} today={today} /> : <p className="hint">{range ? "Sem temperatura observada para este período (a fonte só guarda os últimos 45 dias)." : "Fonte indisponível."}</p>}
             </article>
             <article className="card">
               <h3>Índice FRIESA · Porto (65+ anos)</h3>
               <p className="hint">Impacto previsto do frio na mortalidade. Publicado sobretudo entre novembro e março.</p>
-              {friesa.value?.mais65.length ? <SimpleLine data={friesa.value.mais65.filter((p) => p.date >= sinceShort)} unit="" label="Índice FRIESA Porto 65+" color="var(--c4)" /> : <p className="hint">Sem dados.</p>}
+              {friesa.value?.mais65.length ? <SimpleLine data={range ? inRange(friesa.value.mais65) : friesa.value.mais65.filter((p) => p.date >= sinceShort)} unit="" label="Índice FRIESA Porto 65+" color="var(--c4)" /> : <p className="hint">Sem dados.</p>}
             </article>
             <article className="card">
               <h3>Índice ÍCARO · calor</h3>

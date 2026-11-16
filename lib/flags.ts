@@ -1,5 +1,5 @@
 // Flags regionais partilhadas pela página principal e pela página de flags de IA.
-import { computeFlag, seasonOf, addDays, type Flag } from "./stats";
+import { computeFlag, rangeFlag, seasonOf, addDays, type Flag } from "./stats";
 import type { NorteSeries, Point, UlsRow } from "./sources";
 import type { Indicator } from "./ai";
 import { fmtDate } from "@/components/ui";
@@ -14,14 +14,37 @@ function stale(flag: Flag, today: string, maxDays = 21): Flag {
   return { ...flag, level: "sem-dados", note: `Último dado publicado a ${fmtDate(flag.lastDate)} (índice sazonal ou publicação suspensa). ${flag.note}` };
 }
 
-export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: Point[], today: string): Flag[] {
+export type Range = { from: string; to: string };
+
+const MIN_DATE = "2015-01-01"; // início das séries diárias do SNS Transparência
+const isDay = (s: unknown): s is string =>
+  typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+
+/** Lê ?de=AAAA-MM-DD&ate=AAAA-MM-DD do URL. Valores inválidos são ignorados; o intervalo é limitado a [2015, hoje]. */
+export function parseRange(sp: Record<string, string | string[] | undefined>, today: string): Range | null {
+  const de = isDay(sp.de) ? sp.de : null;
+  const ate = isDay(sp.ate) ? sp.ate : null;
+  if (!de && !ate) return null;
+  let to = ate && ate < today ? ate : today;
+  let from = de ?? addDays(to, -29);
+  if (from > to) [from, to] = [to, from];
+  if (from < MIN_DATE) from = MIN_DATE;
+  return { from, to };
+}
+
+export const rangeQuery = (r: Range | null) => (r ? `?de=${r.from}&ate=${r.to}` : "");
+
+/** Sem intervalo: estado atual (últimos 7 dias). Com intervalo: pior nível atingido dentro dele. */
+export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: Point[], today: string, range: Range | null = null): Flag[] {
+  const f = (id: string, label: string, unit: string, pts: Point[]) => (range ? rangeFlag(id, label, unit, pts, range.from, range.to) : computeFlag(id, label, unit, pts));
+  const ref = range?.to ?? today;
   return [
-    stale(computeFlag("episodios", "Episódios de urgência por dia", "episódios", N?.episodios ?? []), today),
-    stale(computeFlag("resp", "Urgências com infeção respiratória", "%", N?.pctRespiratoria ?? []), today),
-    stale(computeFlag("internamento", "Urgências com internamento", "%", N?.pctInternamento ?? []), today),
-    stale(computeFlag("triagem", "Espera triagem → 1.ª observação", "min", N?.tempoTriagem ?? []), today),
-    stale(computeFlag("friesa", "Índice de frio FRIESA (Porto, 65+)", "", friesa65), today),
-    stale(computeFlag("obitos", "Óbitos certificados por dia (Portugal)", "óbitos", obitos), today, 30),
+    stale(f("episodios", "Episódios de urgência por dia", "episódios", N?.episodios ?? []), ref),
+    stale(f("resp", "Urgências com infeção respiratória", "%", N?.pctRespiratoria ?? []), ref),
+    stale(f("internamento", "Urgências com internamento", "%", N?.pctInternamento ?? []), ref),
+    stale(f("triagem", "Espera triagem → 1.ª observação", "min", N?.tempoTriagem ?? []), ref),
+    stale(f("friesa", "Índice de frio FRIESA (Porto, 65+)", "", friesa65), ref),
+    stale(f("obitos", "Óbitos certificados por dia (Portugal)", "óbitos", obitos), ref, 30),
   ];
 }
 

@@ -33,3 +33,19 @@ assert.deepEqual(parseAiFlags("sem json", ind), []);
 console.log("selfcheck-ai-flags: ok");
 assert.deepEqual(parseAiFlags('```json\n{"flags":[{"indicadores":["[obitos:braga]"],"titulo":"D"}]}\n```', ind).map((f) => f.indicadores[0]), ["obitos:braga"]);
 console.log("selfcheck-ai-flags (ids com parênteses): ok");
+
+const { rangeFlag } = await import("../lib/stats.ts");
+// 6 épocas de série constante 100 com ruído; pico de 200 em janeiro da última época → Alerta com dias contados
+const pts = [];
+for (let t = Date.parse("2020-10-01"); t <= Date.parse("2026-03-31"); t += 864e5) {
+  const d = new Date(t).toISOString().slice(0, 10);
+  pts.push({ date: d, value: (d >= "2026-01-10" && d <= "2026-01-20" ? 200 : 100) + 5 * Math.sin(t / 864e5 * 1.3) + 3 * Math.sin(t / 864e5 * 0.21) });
+}
+const rf = rangeFlag("x", "X", "", pts, "2026-01-01", "2026-01-31");
+assert.equal(rf.level, "alerta"); assert.equal(rf.years, 5);
+for (const [a, b] of [["2025-11-01", "2025-11-30"], ["2025-10-01", "2025-12-31"], ["2025-12-01", "2025-12-07"]]) {
+  assert.notEqual(rangeFlag("x", "X", "", pts, a, b).level, "alerta", `${a}..${b}`);
+}
+assert.equal(rangeFlag("x", "X", "", pts, "2030-01-01", "2030-01-31").level, "sem-dados");
+assert.equal(rangeFlag("x", "X", "", pts, "2021-01-01", "2021-01-31").level, "sem-dados"); // sem 3 anos anteriores
+console.log("selfcheck-range: ok");
