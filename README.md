@@ -58,6 +58,10 @@ O `vercel.json` agenda um cron diário (07:00 UTC) para `/api/revalidate`. A rot
 1. Substituir `data/su-local.xlsx` por um Excel com as mesmas colunas.
 2. A Vercel volta a construir a página; o script `scripts/import-excel.mjs` converte o Excel em JSON.
 
+## Ficheiro mensal da ULSSA
+
+Modelo para a equipa: [/api/modelo-mensal](/api/modelo-mensal) descarrega um Excel em branco com as 5 folhas (SU_diario, SU_diagnosticos, Internamento, CSP_mensal, CSP_ICPC2) e as instruções. Um ficheiro por mês, só com totais; "<5" é aceite para contagens pequenas. Na página Vigilância da equipa, o ficheiro é lido só no browser e os meses juntam-se por data (o mais recente ganha em datas repetidas). Não há armazenamento nem envio para o servidor.
+
 ## Desenvolvimento
 
 ```bash

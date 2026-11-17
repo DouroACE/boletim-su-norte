@@ -3,12 +3,15 @@
 import { useMemo } from "react";
 import { RiskGauge } from "@/components/risk-viz";
 import { fmt, fmtDate } from "@/components/ui";
+import { HBarChart } from "@/components/charts";
 import { DGS_TEXT } from "@/lib/risk";
 import type { Table } from "@/lib/analise";
 import {
   detectarModelo, predefinicoes, qualidade, resumoSU, resumoVigilancia,
   LIMIAR_TMAX_EXTREMO, LIMIAR_TMIN_EXTREMO,
   type Modelo, type Nivel, type PredefCorr, type ProcuraSU,
+  CORES, METRICAS_CSP, cspResumo, contarCensurados, fmtPt, kpisULSSA, nivelDiarioULSSA, totaisPorCodigo, triagemResumo,
+  type Cor, type MensalULSSA,
 } from "@/lib/modelos";
 import s from "@/app/analise/analise.module.css";
 
@@ -169,7 +172,9 @@ export function PainelModelo({
   ti: number;
   aplicar: (p: PredefCorr) => void;
 }) {
-  return modelo === "afluencia_su" ? <PainelSU table={tabelas[ti].table} /> : <PainelVigilancia tabelas={tabelas} ti={ti} aplicar={aplicar} />;
+  if (modelo === "afluencia_su") return <PainelSU table={tabelas[ti].table} />;
+  if (modelo === "vigilancia") return <PainelVigilancia tabelas={tabelas} ti={ti} aplicar={aplicar} />;
+  return null; // folhas do ficheiro mensal: ver PainelMensal
 }
 
 /** Qualidade dos dados de uma tabela: só contagens e a lista de datas/colunas afetadas. */
@@ -199,6 +204,136 @@ export function QualidadeDados({ table }: { table: Table }) {
           </li>
         )}
       </ul>
+    </div>
+  );
+}
+
+const COR_HEX: Record<Cor, string> = { Vermelho: "#b3261e", Laranja: "#c4580f", Amarelo: "#b58900", Verde: "#2e7d32", Azul: "#1f5fbf", Branco: "#d6d6d6" };
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Painel do ficheiro mensal: SU diário e internamento (nível do dia, triagem, KPI), CSP por ACeS e códigos. */
+export function PainelMensal({ m }: { m: MensalULSSA }) {
+  const dias = useMemo(() => nivelDiarioULSSA(m.su ?? undefined, m.intern ?? undefined), [m.su, m.intern]);
+  const tri = useMemo(() => (m.su ? triagemResumo(m.su) : null), [m.su]);
+  const kpis = useMemo(() => kpisULSSA(m.su ?? undefined, m.intern ?? undefined), [m.su, m.intern]);
+  const csp = useMemo(() => (m.csp ? cspResumo(m.csp) : null), [m.csp]);
+  const censurados = [m.su, m.intern, m.sud, m.csp, m.icpc].reduce((n, t) => n + (t ? contarCensurados(t) : 0), 0);
+  const ultimo = dias.at(-1);
+
+  // Mês mais recente: uma célula por dia do mês (dias sem dados ficam como "–").
+  const mesIso = ultimo ? ultimo.data.slice(0, 7) : null;
+  const [ano, mesNum] = mesIso ? mesIso.split("-").map(Number) : [0, 0];
+  const nDias = mesIso ? new Date(Date.UTC(ano, mesNum, 0)).getUTCDate() : 0;
+  const porData = new Map(dias.map((d) => [d.data, d]));
+  const ultimoMes = csp?.linhas.at(-1)?.mes;
+  const cspMes = csp?.linhas.filter((l) => l.mes === ultimoMes) ?? [];
+  const codigos = m.sud ? totaisPorCodigo(m.sud).map((x) => ({ codigo: x.codigo, total: x.total })) : [];
+  const codigosIcpc = m.icpc ? totaisPorCodigo(m.icpc).map((x) => ({ codigo: x.codigo, total: x.total })) : [];
+
+  return (
+    <div className={s.painel}>
+      {ultimo && mesIso && (
+        <>
+          <div className={s.topo}>
+            <div><RiskGauge level={ultimo.nivel} label={`Nível ULSSA em ${dd(ultimo.data)}`} /></div>
+            <div className={s.bloco}>
+              <p className={s.leitura}>Última data: {dd(ultimo.data)} · {ultimo.nivel == null ? "sem dados" : nivelTexto(ultimo.nivel)}</p>
+              <p className="hint">{ultimo.motivo}</p>
+            </div>
+          </div>
+
+          <h3 className="sub-h">Nível diário em {mesIso}</h3>
+          <ol className={s.faixa} aria-label={`Nível diário de ${mesIso}`}>
+            {Array.from({ length: nDias }, (_, i) => {
+              const iso = `${mesIso}-${pad2(i + 1)}`;
+              const d = porData.get(iso);
+              const txt = d?.nivel == null || d == null ? "sem dados" : nivelTexto(d.nivel);
+              return (
+                <li
+                  key={iso}
+                  className={`${s.cel} ${d?.nivel == null ? s.semDados : `dgs-${d.nivel}`}`}
+                  title={`${dd(iso)}: ${d?.motivo ?? "sem dados"}`}
+                  aria-label={`${dd(iso)}: ${txt}. ${d?.motivo ?? ""}`}
+                >
+                  <span>{i + 1}</span>
+                  <strong>{d?.nivel == null ? "–" : `N${d.nivel}`}</strong>
+                </li>
+              );
+            })}
+          </ol>
+          <ul className={s.legenda} aria-label="Legenda dos níveis">
+            {([0, 1, 2, 3] as Nivel[]).map((n) => <li key={n} className={`dgs-badge dgs-${n}`}>N{n} · {DGS_TEXT[n]}</li>)}
+          </ul>
+        </>
+      )}
+
+      {tri && tri.total > 0 && (
+        <div className={s.bloco}>
+          <h3 className="sub-h">Triagem no período</h3>
+          <div
+            className={s.barra}
+            role="img"
+            aria-label={`Triagem: ${CORES.map((c) => `${c} ${fmtPt(tri.pct[c] ?? 0)} %`).join(", ")}`}
+          >
+            {CORES.map((c) => (tri.pct[c] ? <span key={c} style={{ width: `${tri.pct[c]}%`, background: COR_HEX[c] }} /> : null))}
+          </div>
+          <ul className={s.legenda}>
+            {CORES.map((c) => <li key={c}>{c}: {tri.pct[c] == null ? "–" : `${fmtPt(tri.pct[c]!)} %`}</li>)}
+          </ul>
+          <p className="hint">Urgentes ou mais graves (vermelho, laranja, amarelo): <strong>{tri.pctUrgentes == null ? "–" : `${fmtPt(tri.pctUrgentes)} %`}</strong> do total de {fmt(tri.total, 0)} episódios.</p>
+        </div>
+      )}
+
+      {ultimo && kpis && (
+        <div className={s.kpis}>
+          <Kpi rotulo="Média diária do SU" valor={fmt(kpis.mediaSU, 0)} unidade=" episódios" nota={`${kpis.dias} dias com dados`} />
+          <Kpi rotulo="Internamento" valor={fmt(kpis.pctInternamento, 1)} unidade=" %" nota="Destino internamento / total" />
+          <Kpi rotulo="Admissões UCI" valor={fmt(kpis.admissoesUci, 0)} unidade="" nota="Total do período" />
+          <Kpi rotulo="Ocupação média (enfermarias)" valor={fmt(kpis.ocupacaoMedia, 1)} unidade=" %" nota={`Óbitos no SU: ${fmt(kpis.obitosSU, 0)} · hospitalares: ${fmt(kpis.obitosHosp, 0)}`} />
+        </div>
+      )}
+
+      {codigos.length > 0 && (
+        <div className={s.bloco}>
+          <h3 className="sub-h">Diagnósticos no período (ICD-10)</h3>
+          <HBarChart data={codigos} x="total" y="codigo" label="Total por código ICD-10 no período" unit="" />
+        </div>
+      )}
+
+      {csp && cspMes.length > 0 && (
+        <div className={s.bloco}>
+          <h3 className="sub-h">CSP em {ultimoMes} por ACeS</h3>
+          <div className="table-wrap">
+            <table className="col-table">
+              <caption className="sr-only">Consultas CSP do mês por ACeS, com variação face ao ano anterior</caption>
+              <thead>
+                <tr><th scope="col">ACeS</th>{METRICAS_CSP.map((x) => <th scope="col" key={x.chave}>{x.rotulo}</th>)}</tr>
+              </thead>
+              <tbody>
+                {cspMes.map((l) => (
+                  <tr key={l.aces}>
+                    <th scope="row">{l.aces}</th>
+                    {METRICAS_CSP.map((x) => {
+                      const v = l.variacao[x.chave];
+                      return <td key={x.chave}>{fmt(l.totais[x.chave], 0)}{v == null ? "" : ` (${sinal(v)} %)`}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint">Variação face ao mesmo mês do ano anterior, quando o ficheiro o contém.</p>
+        </div>
+      )}
+
+      {codigosIcpc.length > 0 && (
+        <div className={s.bloco}>
+          <h3 className="sub-h">Códigos ICPC-2 no período</h3>
+          <HBarChart data={codigosIcpc} x="total" y="codigo" label="Total por código ICPC-2 no período" unit="" />
+        </div>
+      )}
+
+      {censurados > 0 && <p className="hint">{censurados} células suprimidas (&lt;5), contadas como em falta.</p>}
     </div>
   );
 }
