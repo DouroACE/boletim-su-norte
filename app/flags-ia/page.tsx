@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchNorte, fetchFriesaPorto, fetchObitos, fetchIpmaAvisos, fetchUlsNorte } from "@/lib/sources";
+import { fetchNorte, fetchFriesaPorto, fetchObitosDiarios, fetchIpmaAvisos, fetchUlsNorte } from "@/lib/sources";
 import { regionalFlags, historySince, toIndicators, parseRange, rangeQuery } from "@/lib/flags";
 import { DateFilter } from "@/components/date-filter";
 import { aiFlags, ruleFlags } from "@/lib/ai";
@@ -20,11 +20,11 @@ export default async function FlagsPage({ searchParams }: { searchParams: Promis
   const [norte, friesa, obitos, avisos, uls] = await Promise.all([
     orNull(fetchNorte(since, REGIAO)),
     orNull(fetchFriesaPorto(since)),
-    orNull(fetchObitos(since)),
+    orNull(fetchObitosDiarios(since)),
     orNull(fetchIpmaAvisos()),
     orNull(fetchUlsNorte(today, range?.to)),
   ]);
-  const indicators = toIndicators(regionalFlags(norte, friesa?.mais65 ?? [], obitos ?? [], today, range), uls ?? []);
+  const indicators = toIndicators(regionalFlags(norte, friesa?.mais65 ?? [], obitos?.pontos ?? [], today, range, obitos?.norte), uls ?? []);
   const isCurrent = !range || range.to >= today;
   const result = await aiFlags(indicators, isCurrent ? avisos ?? [] : [], range ? `de ${range.from} a ${range.to}` : "últimos 7 dias");
   const stat = ruleFlags(indicators);

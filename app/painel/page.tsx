@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchNorte, fetchFriesaPorto, fetchObitos, fetchUlsNorte, type UlsRow } from "@/lib/sources";
+import { fetchNorte, fetchFriesaPorto, fetchObitosDiarios, fetchUlsNorte, fetchUlssaMensal, type UlsRow } from "@/lib/sources";
 import { regionalFlags, historySince, parseRange, rangeQuery } from "@/lib/flags";
 import { dgsIndicators, regionalDgsLevel, dgsLevel, DGS_TEXT, type DgsLevel } from "@/lib/risk";
 import { levelRank, type Level } from "@/lib/stats";
@@ -29,10 +29,10 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
   const [norte, friesa, obitos, uls] = await Promise.all([
     orNull(fetchNorte(since, REGIAO)),
     orNull(fetchFriesaPorto(since)),
-    orNull(fetchObitos(since)),
+    orNull(fetchObitosDiarios(since)),
     orNull(fetchUlsNorte(today, range?.to)),
   ]);
-  const flags = regionalFlags(norte, friesa?.mais65 ?? [], obitos ?? [], today, range);
+  const flags = regionalFlags(norte, friesa?.mais65 ?? [], obitos?.pontos ?? [], today, range, obitos?.norte);
   const ind = dgsIndicators(flags);
   const reg = regionalDgsLevel(ind);
   const U = [...(uls ?? [])].sort((a, b) => levelRank[ulsLevel(b)] - levelRank[ulsLevel(a)] || (ulsDgs(b) ?? -1) - (ulsDgs(a) ?? -1));

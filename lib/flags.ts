@@ -35,7 +35,7 @@ export function parseRange(sp: Record<string, string | string[] | undefined>, to
 export const rangeQuery = (r: Range | null) => (r ? `?de=${r.from}&ate=${r.to}` : "");
 
 /** Sem intervalo: estado atual (últimos 7 dias). Com intervalo: pior nível atingido dentro dele. */
-export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: Point[], today: string, range: Range | null = null): Flag[] {
+export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: Point[], today: string, range: Range | null = null, obitosNorte = false): Flag[] {
   const f = (id: string, label: string, unit: string, pts: Point[]) => (range ? rangeFlag(id, label, unit, pts, range.from, range.to) : computeFlag(id, label, unit, pts));
   const ref = range?.to ?? today;
   return [
@@ -44,7 +44,7 @@ export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: 
     stale(f("internamento", "Urgências com internamento", "%", N?.pctInternamento ?? []), ref),
     stale(f("triagem", "Espera triagem → 1.ª observação", "min", N?.tempoTriagem ?? []), ref),
     stale(f("friesa", "Índice de frio FRIESA (Porto, 65+)", "", friesa65), ref),
-    stale(f("obitos", "Óbitos certificados por dia (Portugal)", "óbitos", obitos), ref, 30),
+    stale(f("obitos", obitosNorte ? "Óbitos por dia · Região Norte (eVM)" : "Óbitos certificados por dia (Portugal)", "óbitos", obitos), ref, 30),
   ];
 }
 

@@ -1,5 +1,5 @@
 import {
-  REVALIDATE, fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchManchester, fetchIpmaForecast, fetchIpmaAvisos, fetchMeteoPorto, fetchUlsNorte, safe,
+  REVALIDATE, fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchManchester, fetchIpmaForecast, fetchIpmaAvisos, fetchMeteoPorto, fetchUlsNorte, fetchObitosDiarios, fetchUlssaMensal, safe,
   type Point, type SourceStatus,
 } from "@/lib/sources";
 import { seasonOf, seasonalBaseline, rolling, dayOfSeason, addDays, worstLevel, type Flag } from "@/lib/stats";
@@ -64,7 +64,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     safe({ id: "sns-urg", name: "SNS Transparência — Vigilância sazonal das urgências (diário)", url: `${SNS_URL}atividade-sindrome-gripal-csh/` }, () => fetchNorte(since, REGIAO), (v) => lastOf(v.episodios)),
     safe({ id: "friesa", name: "Índice FRIESA — impacto do frio, Porto (INSA)", url: `${SNS_URL}indice-friesa/` }, () => fetchFriesaPorto(since), (v) => lastOf(v.mais65)),
     safe({ id: "icaro", name: "Índice ÍCARO — impacto do calor (INSA)", url: `${SNS_URL}evolucao-diaria-do-indice-icaro/` }, () => fetchIcaro(sinceShort), lastOf),
-    safe({ id: "obitos", name: "Certificados de óbito diários — Portugal (SICO)", url: `${SNS_URL}evolucao-diaria-de-certificados-de-obito/` }, () => fetchObitos(since), lastOf),
+    safe({ id: "obitos", name: "Óbitos diários — Região Norte (eVM, DGS); alternativa: SICO nacional", url: "https://evm.min-saude.pt/" }, () => fetchObitosDiarios(since), (v) => lastOf(v.pontos)),
     safe({ id: "manchester", name: `Atendimentos por triagem de Manchester — ${INSTITUICAO.replace(", EPE", "")}`, url: `${SNS_URL}atendimentos-em-urgencia-triagem-manchester/` }, () => fetchManchester(INSTITUICAO, `${season.start - 1}-10`), (v) => v.at(-1)?.mes),
     safe({ id: "ipma-prev", name: "IPMA — Previsão diária, Porto", url: "https://api.ipma.pt/" }, () => fetchIpmaForecast(), (v) => v[0]?.date),
     safe({ id: "ipma-avisos", name: "IPMA — Avisos meteorológicos, distritos do Norte", url: "https://www.ipma.pt/pt/otempo/prev-sam/" }, () => fetchIpmaAvisos(), () => today),
@@ -74,14 +74,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
 
   const N = norte.value;
   const U = uls.value ?? [];
-  const flags: Flag[] = regionalFlags(N, friesa.value?.mais65 ?? [], obitos.value ?? [], today, range);
+  const flags: Flag[] = regionalFlags(N, friesa.value?.mais65 ?? [], obitos.value?.pontos ?? [], today, range, obitos.value?.norte);
   const series: Record<string, Point[]> = {
     episodios: N?.episodios ?? [],
     resp: N?.pctRespiratoria ?? [],
     internamento: N?.pctInternamento ?? [],
     triagem: N?.tempoTriagem ?? [],
     friesa: friesa.value?.mais65 ?? [],
-    obitos: obitos.value ?? [],
+    obitos: obitos.value?.pontos ?? [],
   };
   const level = worstLevel(flags);
   const L = analyseLocal();

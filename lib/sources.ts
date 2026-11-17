@@ -3,7 +3,8 @@
 // sozinha, no máximo de REVALIDATE em REVALIDATE segundos, sem servidor próprio.
 
 export const REVALIDATE = 60 * 60 * 3; // 3 horas
-import { ULS_NORTE, decumulate, groupByUls, compareHomologous, type UlsMetric } from "./uls";
+import { ULS_NORTE, decumulate, groupByUls, compareHomologous, type UlsMetric, type MonthVal } from "./uls";
+import { parseEvm } from "./evm";
 
 // Etiqueta comum a todas as recolhas: o cron diário (/api/revalidate) invalida-a e força dados frescos.
 export const DATA_TAG = "dados-publicos";
@@ -21,6 +22,12 @@ async function getJSON<T>(url: string, revalidate = REVALIDATE): Promise<T> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
+}
+
+async function getText(url: string, revalidate = REVALIDATE): Promise<string> {
+  const res = await fetch(url, { next: { revalidate, tags: [DATA_TAG] }, signal: AbortSignal.timeout(40_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
 }
 
 const day = (s: string) => String(s).slice(0, 10);
@@ -265,7 +272,59 @@ export const FONTES = {
   meteo: { nome: "Open-Meteo — Temperatura observada e prevista", url: "https://open-meteo.com/" },
   osm: { nome: "Mapa © OpenStreetMap", url: "https://www.openstreetmap.org/copyright" },
   tempos: { nome: "SPMS — Portal TEMPOS (coordenadas das ULS)", url: "https://tempos.min-saude.pt/" },
+  evm: { nome: "DGS — eVM, Vigilância da Mortalidade (óbitos diários, Região Norte)", url: "https://evm.min-saude.pt/" },
+  ocupacao: { nome: "SNS Transparência — Taxa de ocupação hospitalar (ULS Santo António)", url: `${SNS_DS}ocupacao-do-internamento/` },
+  csp: { nome: "SNS Transparência — Consultas médicas nos CSP (ULS Santo António)", url: `${SNS_DS}evolucao-das-consultas-medicas-nos-csp/` },
   dgs: { nome: "DGS / DE-SNS — Plano Nacional de Preparação e Resposta Sazonal em Saúde 2026–2027 (tabela p. 20)" },
   local: { nome: "Dados locais do SU (ficheiro Excel do serviço)" },
 } satisfies Record<string, { nome: string; url?: string }>;
 export type FonteId = keyof typeof FONTES;
+
+
+/* ------------------------------------------------------------------ */
+/* eVM — óbitos diários da Região Norte (até ao dia anterior)           */
+/* ------------------------------------------------------------------ */
+export async function fetchEvmNorte(): Promise<Point[]> {
+  const pts = parseEvm(await getText("https://evm.min-saude.pt/chart?t=ARS&s=0", 60 * 60 * 6), "ARS Norte");
+  if (!pts.length) throw new Error("formato do eVM mudou");
+  return pts;
+}
+
+/* ------------------------------------------------------------------ */
+/* ULS Santo António — indicadores mensais próprios (SNS Transparência) */
+/* ------------------------------------------------------------------ */
+export type UlssaMensal = { ocupacao: MonthVal[]; lotacao: number | null; cspPresenciais: MonthVal[]; cspNaoPresenciais: MonthVal[] };
+
+const daysIn = (mes: string) => new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).getUTCDate();
+
+/** Ocupação mensal = dias de internamento do mês ÷ (lotação × dias do mês). A SPMS publica os dias acumulados no ano. */
+export async function fetchUlssaMensal(today: string): Promise<UlssaMensal> {
+  const mesAtual = today.slice(0, 7);
+  const qO = new URLSearchParams({ where: `instituicao LIKE "Santo António" AND tempo >= "2022-01"`, select: "tempo,no_de_dias_de_internamento,lotacao_praticada", order_by: "tempo" });
+  const qC = new URLSearchParams({ where: `entidade LIKE "Santo António" AND tempo >= "2022-01"`, select: "tempo,no_de_consultas_medicas_presencias_qt,no_de_consultas_medicas_nao_presenciais_ou_inespecificas_qt", order_by: "tempo" });
+  type R = Record<string, string | number>;
+  const [ocup, csp] = await Promise.all([
+    getJSON<R[]>(`${SNS}/ocupacao-do-internamento/exports/json?${qO}`),
+    getJSON<R[]>(`${SNS}/evolucao-das-consultas-medicas-nos-csp/exports/json?${qC}`),
+  ]);
+  const rows = ocup.map((r) => ({ mes: String(r.tempo), dias: Number(r.no_de_dias_de_internamento), lot: Number(r.lotacao_praticada) })).filter((r) => r.mes < mesAtual);
+  const mensal = decumulate(rows, ["dias"]);
+  const ocupacao = mensal.map((r) => ({ mes: r.mes, valor: r.lot ? (r.dias / (r.lot * daysIn(r.mes))) * 100 : NaN }));
+  const c = csp.filter((r) => String(r.tempo) < mesAtual);
+  return {
+    ocupacao,
+    lotacao: rows.at(-1)?.lot ?? null,
+    cspPresenciais: c.map((r) => ({ mes: String(r.tempo), valor: Number(r.no_de_consultas_medicas_presencias_qt) })),
+    cspNaoPresenciais: c.map((r) => ({ mes: String(r.tempo), valor: Number(r.no_de_consultas_medicas_nao_presenciais_ou_inespecificas_qt) })),
+  };
+}
+
+/** Óbitos diários para o boletim: Região Norte pelo eVM (até ontem); se o eVM falhar, SICO nacional. */
+export async function fetchObitosDiarios(since: string): Promise<{ pontos: Point[]; norte: boolean }> {
+  try {
+    return { pontos: (await fetchEvmNorte()).filter((p) => p.date >= since), norte: true };
+  } catch (e) {
+    console.error("[evm] indisponível, a usar SICO nacional:", (e as Error).message);
+    return { pontos: await fetchObitos(since), norte: false };
+  }
+}

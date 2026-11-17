@@ -64,3 +64,12 @@ const rl = regionalDgsLevel(dind);
 assert.equal(rl.level, 2); assert.equal(rl.withData, 1); assert.match(rl.reason, /\+27,0 % → nível 2/);
 assert.equal(regionalDgsLevel(dgsIndicators([])).level, null);
 console.log("selfcheck-risk: ok");
+
+const { parseEvm } = await import("../lib/evm.ts");
+const t = (md) => Date.parse(`2012-${md}T00:00:00Z`);
+const html = `x new Highcharts.Chart({ "title": { "text": "Mortalidade na região de saúde ARS Centro" }, "series": [ { "data": [ [ ${t("01-01")}, 1 ] ], "name": "2026" } ] })
+ new Highcharts.Chart({ "title": { "text": "Mortalidade na região de saúde ARS Norte" }, "series": [ { "data": [ [ ${t("02-28")}, 100 ], [ ${t("02-29")}, 101 ], [ ${t("11-16")}, 104 ] ], "name": "2025" }, { "data": [ [ ${t("11-15")}, 110 ], [ ${t("11-16")}, null ] ], "name": "2026" } ] })`;
+const ev = parseEvm(html, "ARS Norte");
+assert.deepEqual(ev, [{ date: "2025-02-28", value: 100 }, { date: "2025-11-16", value: 104 }, { date: "2026-11-15", value: 110 }]);
+assert.deepEqual(parseEvm("<html>mudou</html>", "ARS Norte"), []);
+console.log("selfcheck-evm: ok");
