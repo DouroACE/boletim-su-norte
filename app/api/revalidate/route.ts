@@ -11,6 +11,6 @@ export async function GET(req: Request) {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) return Response.json({ ok: false }, { status: 401 });
   revalidateTag(DATA_TAG);
   revalidatePath("/");
-  revalidatePath("/flags-ia");
+  revalidatePath("/workspace");
   return Response.json({ ok: true, revalidated: new Date().toISOString() });
 }

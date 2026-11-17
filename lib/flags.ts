@@ -1,10 +1,7 @@
-// Flags partilhadas pelo boletim e pela página de flags de IA.
-import { computeFlag, rangeFlag, seasonOf, addDays, type Flag } from "./stats";
-import type { NorteSeries, Point, UlsRow, UlssaMensal, Aviso } from "./sources";
-import type { Indicator } from "./ai";
-import { compareHomologous, type UlsMetric } from "./uls";
-import { dgsLevel, dgsToLevel, LIMIAR_OCUPACAO, worstOf } from "./risk";
+// Flags regionais do boletim.
 import { fmtDate } from "@/components/ui";
+import { computeFlag, rangeFlag, seasonOf, addDays, type Flag } from "./stats";
+import type { NorteSeries, Point } from "./sources";
 
 /** Início do histórico pedido às fontes (5 épocas + margem). Igual nas duas páginas para partilhar o cache. */
 export const historySince = (today: string) => addDays(`${seasonOf(today).start - 5}-10-01`, -10);
@@ -48,49 +45,4 @@ export function regionalFlags(N: NorteSeries | null, friesa65: Point[], obitos: 
     stale(f("friesa", "Índice de frio FRIESA (Porto, 65+)", "", friesa65), ref),
     stale(f("obitos", obitosNorte ? "Óbitos por dia · Região Norte (eVM)" : "Óbitos certificados por dia (Portugal)", "óbitos", obitos), ref, 30),
   ];
-}
-
-const MES = (m: string) => fmtDate(`${m}-15`, { month: "short", year: "numeric" });
-const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(0)}%`;
-const num1 = (n: number) => n.toLocaleString("pt-PT", { maximumFractionDigits: 1 });
-
-/** Indicadores que a IA pode citar nas flags: ULSSA (urgências, SICO, ocupação, CSP), os flags regionais recebidos,
- *  e os avisos IPMA do distrito do Porto (null = fora do presente, sem avisos). */
-export function toIndicators(flags: Flag[], uls: UlsRow | undefined, mensal: UlssaMensal | null, avisosPorto: Aviso[] | null): Indicator[] {
-  const out: Indicator[] = flags.filter((f) => f.level !== "sem-dados").map((f) => ({ id: f.id, label: f.label, level: f.level, detail: f.note }));
-  if (uls) {
-    for (const [k, m, nome] of [["obitos", uls.obitos, "Óbitos certificados (SICO)"], ["urgencias", uls.urgencias, "Atendimentos em urgência"]] as const) {
-      const ind = ulssaMetric(k, m, nome);
-      if (ind) out.push(ind);
-    }
-  }
-  const oc = mensal?.ocupacao.filter((s) => Number.isFinite(s.valor)).at(-1);
-  if (oc) {
-    out.push({
-      id: "ocupacao:santo-antonio",
-      label: "Taxa de ocupação hospitalar · ULSSA",
-      level: dgsToLevel(dgsLevel(oc.valor, LIMIAR_OCUPACAO)),
-      detail: `${MES(oc.mes)}: ${num1(oc.valor)} %. Limiares DGS 85 %, 95 % e 105 %.`,
-    });
-  }
-  if (mensal) {
-    const csp = compareHomologous(mensal.cspPresenciais, "pct");
-    if (csp.valor != null && csp.mes) {
-      const comp = csp.homologo != null && csp.varPct != null ? `; mesmo mês do ano anterior: ${csp.homologo} (${signed(csp.varPct)})` : "; sem mês homólogo";
-      out.push({ id: "csp:santo-antonio", label: "Consultas médicas CSP presenciais · ULSSA", level: csp.level, detail: `${MES(csp.mes)}: ${csp.valor}${comp}.` });
-    }
-  }
-  if (avisosPorto) {
-    const level = avisosPorto.length ? worstOf(avisosPorto.map((a) => (a.nivel === "yellow" ? "atencao" : "alerta"))) : "normal";
-    const detail = avisosPorto.length ? avisosPorto.map((a) => `${a.tipo} (${a.nivel})`).join("; ") + "." : "Sem avisos amarelos, laranja ou vermelhos no distrito do Porto.";
-    out.push({ id: "avisos:porto", label: "Avisos IPMA · distrito do Porto", level, detail });
-  }
-  return out;
-}
-
-/** Indicador mensal de uma ULS: último mês publicado vs. mesmo mês do ano anterior. */
-function ulssaMetric(k: string, m: UlsMetric, nome: string): Indicator | null {
-  if (m.valor == null || !m.mes) return null;
-  const comp = m.homologo != null && m.varPct != null ? `; mesmo mês do ano anterior: ${m.homologo} (${signed(m.varPct)}${m.z != null ? `, z = ${m.z.toFixed(1)}` : ""})` : m.suspeito ? "; comparação suspensa: a SPMS repetiu um mês na publicação (a rever)" : "; sem mês homólogo";
-  return { id: `${k}:santo-antonio`, label: `${nome} · ULSSA`, level: m.level, detail: `${MES(m.mes)}: ${m.valor}${comp}.` };
 }

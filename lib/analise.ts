@@ -317,7 +317,8 @@ export function tabelaDePontos(nome: string, pts: Pt[]): Table {
 export function juntarTabelas(partes: { prefixo: string; table: Table }[]): Table {
   const usadas = partes.flatMap((p) => {
     const d = p.table.columns.find((c) => c.type === "date");
-    const nums = p.table.columns.filter((c) => c.type === "number");
+    // Colunas numéricas sem nenhum valor (ex.: indicador que a equipa não preencheu) não aparecem como variável.
+    const nums = p.table.columns.filter((c) => c.type === "number" && c.values.some((v) => typeof v === "number"));
     return d && nums.length && p.table.nRows ? [{ ...p, d, nums }] : [];
   });
   const total = usadas.reduce((s, u) => s + u.table.nRows, 0);

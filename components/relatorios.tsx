@@ -9,7 +9,7 @@ import {
   sobrepoeEpocaCritica, sugestaoUSP, tabelaHtml, textoCSP, textoEmail, ultimaSemanaCompleta, validarCopia,
   type Nivel, type RegistoSemanal,
 } from "@/lib/relatorios";
-import { RelacionarVariaveis, type SeriePublica } from "@/components/relacionar";
+import { lerSemana, type Folhas } from "@/lib/semanal";
 import s from "@/app/relatorios/relatorios.module.css";
 
 /** Chave do localStorage. Só este browser; cada leitura e escrita está em try/catch. */
@@ -19,7 +19,7 @@ const TAMANHO_RESUMO = 60;
 type Store = Record<string, RegistoSemanal>;
 type Leitura = { ok: true; dados: Store } | { ok: false };
 
-function lerStore(): Leitura {
+export function lerStore(): Leitura {
   try {
     const raw = localStorage.getItem(CHAVE);
     if (!raw) return { ok: true, dados: {} };
@@ -88,11 +88,9 @@ interface Props {
   icaro: Point[] | null;
   friesa65: Point[] | null;
   avisos: Aviso[] | null;
-  /** Séries públicas diárias para o bloco «Relacionar variáveis». */
-  publicos: SeriePublica[];
 }
 
-export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos }: Props) {
+export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) {
   const uid = useId();
   const id = (nome: string) => `${uid}-${nome}`;
 
@@ -104,6 +102,7 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
   const [msgEnvio, setMsgEnvio] = useState("");
   const [msgHistorico, setMsgHistorico] = useState("");
   const [periodoIdx, setPeriodoIdx] = useState(0);
+  const [msgExcel, setMsgExcel] = useState<string[]>([]);
 
   // Lê o browser só depois da montagem (evita diferenças entre servidor e cliente).
   useEffect(() => {
@@ -215,6 +214,43 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
     setMsgHistorico(`${importadas} semana(s) importada(s).`);
   }
 
+  /** Lê um ou mais ficheiros semanais (.xlsx) e guarda cada semana. O ficheiro nunca sai do browser. */
+  async function carregarExcel(lista: FileList | null, input: HTMLInputElement) {
+    if (!lista?.length || !storeOk) return;
+    const { default: lerXlsx } = await import("read-excel-file/browser");
+    const novo: Store = { ...store };
+    const linhas: string[] = [];
+    let ultima = "";
+    for (const f of Array.from(lista)) {
+      try {
+        if (!f.name.toLowerCase().endsWith(".xlsx")) throw new Error("use o modelo .xlsx");
+        const folhas: Folhas = {};
+        for (const { sheet, data } of await lerXlsx(f)) folhas[sheet] = data as Folhas[string];
+        const lido = lerSemana(folhas);
+        if ("erro" in lido) { linhas.push(`${f.name}: ${lido.erro}`); continue; }
+        const r = lido.registo;
+        if (!r.uspTexto) r.uspTexto = sugestaoUSP(icaro ?? [], friesa65 ?? [], avisos ?? [], r.semana, hojeIso);
+        if (novo[r.semana] && !window.confirm(`Já existe registo de ${rotuloSemana(r.semana)}. Substituir pelo ficheiro ${f.name}?`)) {
+          linhas.push(`${f.name}: ${rotuloSemana(r.semana)} mantida como estava.`);
+          continue;
+        }
+        novo[r.semana] = r;
+        ultima = r.semana;
+        linhas.push(`${f.name}: ${rotuloSemana(r.semana)} carregada.${lido.avisos.length ? ` Verifique: ${lido.avisos.join(" ")}` : ""}`);
+      } catch (e) {
+        linhas.push(`${f.name}: não foi possível ler (${(e as Error).message}).`);
+      }
+    }
+    input.value = "";
+    if (ultima && !gravarStore(novo)) {
+      setMsgExcel([...linhas, "Não foi possível guardar neste browser (armazenamento bloqueado ou cheio)."]);
+      return;
+    }
+    setStore(novo);
+    if (ultima) { setSegunda(ultima); setForm(novo[ultima]); }
+    setMsgExcel(linhas);
+  }
+
   async function copiarPeriodo() {
     if (!doPeriodo.length) {
       setMsgHistorico("Não há semanas com registo neste período.");
@@ -225,9 +261,110 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
 
   return (
     <div className={s.pagina}>
-      {/* a. Semana */}
+      {/* 1. Carregar o Excel da semana */}
       <details className="card dobra" open>
-        <summary><h2 id={id("h-semana")}>Semana</h2></summary>
+        <summary><h2 id={id("h-excel")}>1. Carregar a semana (Excel)</h2></summary>
+        <p className="hint">
+          Cada equipa preenche a sua folha do modelo (Hospital, CSP, USP, Laboratório e Indicadores diários) e a USP larga aqui o ficheiro.
+          Pode largar várias semanas de uma vez. Os ficheiros são lidos só neste browser.
+        </p>
+        <div className={s.acoes}>
+          <a className="btn ghost" href="/api/modelo-semanal" download>Descarregar modelo semanal (.xlsx)</a>
+          <label className={`btn ${s.ficheiro}`} aria-disabled={!storeOk}>
+            Escolher ficheiro(s) da semana
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              multiple
+              disabled={!storeOk}
+              onChange={(e) => void carregarExcel(e.target.files, e.target)}
+              className={s.ocultoInput}
+            />
+          </label>
+        </div>
+        <ul className={s.estado} role="status" aria-live="polite">{msgExcel.map((l, i) => <li key={i}>{l}</li>)}</ul>
+      </details>
+
+      {/* 2. Relatório da DE-SNS */}
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-hist")}>2. Monitorização semanal · relatório para a DE-SNS</h2></summary>
+        <p className="hint">A tabela «Monitorização Semanal do PCRSS» com uma linha por semana carregada. Copie o período e cole no Word ou no Outlook.</p>
+        {todos.length === 0 ? (
+          <p className="hint">Ainda não há semanas guardadas neste browser.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="uls-table">
+              <thead>
+                <tr><th scope="col">Semana</th><th scope="col">Nível hospitalar</th><th scope="col">Camas livres / macas</th><th scope="col">CSP</th><th scope="col">USP</th><th scope="col"><span className="sr-only">Ações</span></th></tr>
+              </thead>
+              <tbody>
+                {todos.map((r) => (
+                  <tr key={r.semana}>
+                    <th scope="row">{rotuloSemana(r.semana)}</th>
+                    <td data-label="Nível hospitalar"><span className={`dgs-badge dgs-${r.cuidadosNivel}`}>{DGS_TEXT[r.cuidadosNivel]}</span></td>
+                    <td data-label="Camas / macas">{r.camasLivres ?? "—"}/{r.macasLivres ?? "—"}</td>
+                    <td data-label="CSP">{r.cspDoentesMedicoHora != null ? `${numPt(r.cspDoentesMedicoHora)} doentes/médico/h` : curto(r.cspAfluencia)}</td>
+                    <td data-label="USP">{curto(r.uspTexto)}</td>
+                    <td>
+                      <div className={s.acoesLinha}>
+                        <button type="button" className="btn ghost" onClick={() => { if (podeSair()) { setSegunda(r.semana); setForm(r); setMsgRegisto(""); document.getElementById(id("h-envio"))?.scrollIntoView({ behavior: "smooth" }); } }} aria-label={`Abrir ${rotuloSemana(r.semana)}`}>Abrir</button>
+                        <button type="button" className="btn danger" onClick={() => apagar(r.semana)} disabled={!storeOk} aria-label={`Apagar ${rotuloSemana(r.semana)}`}>Apagar</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className={s.periodo}>
+          <div className={s.campo}>
+            <label htmlFor={id("periodo")}>Período do relatório</label>
+            <select id={id("periodo")} value={periodoIdx} onChange={(e) => setPeriodoIdx(Number(e.target.value))}>
+              {periodos.map((p, i) => <option key={p.nome} value={i}>{p.nome} · {p.de.split("-").reverse().join("/")} a {p.ate.split("-").reverse().join("/")} (envio até {p.prazo})</option>)}
+            </select>
+          </div>
+          <ul className={s.resumo} aria-label="Resumo do período">
+            <li>Semanas com registo: <strong>{resumo.semanas}</strong></li>
+            {NIVEIS_TEXTO.map((t, n) => <li key={t}>{t} (nível {n}): <strong>{resumo.porNivel[n]}</strong></li>)}
+            <li>Semanas em nível 2 ou 3: {resumo.semanasAlto.length ? resumo.semanasAlto.map((x) => rotuloSemana(x)).join("; ") : "nenhuma"}</li>
+          </ul>
+        </div>
+
+        <div className={s.acoes}>
+          <button type="button" className="btn" onClick={copiarPeriodo}>Copiar tabela do período</button>
+        </div>
+        <p className={s.estado} role="status" aria-live="polite">{msgHistorico}</p>
+      </details>
+
+      {/* 3. Texto da semana */}
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-envio")}>3. E-mail da semana · {rotuloSemana(segunda)}</h2></summary>
+        <p className="hint">Os 11 campos da matriz semanal da DE-SNS, para colar no e-mail de segunda-feira. Escolha a semana em «Abrir» na tabela acima.</p>
+        <textarea id={id("previa")} className={s.previa} readOnly rows={12} value={textoEnvio} aria-label="Pré-visualização do e-mail" />
+        <div className={s.acoes}>
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => setMsgEnvio(await copiarTexto(textoEnvio))}
+          >
+            Copiar texto
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={async () => setMsgEnvio(await copiarTabela(tabelaHtml([{ ...form, semana: segunda }]), textoEnvio))}
+          >
+            Copiar tabela
+          </button>
+        </div>
+        <p className={s.estado} role="status" aria-live="polite">{msgEnvio}</p>
+      </details>
+
+      {/* 4. Rever ou editar */}
+      <details className="card dobra">
+        <summary><h2 id={id("h-semana")}>4. Rever ou corrigir uma semana</h2></summary>
         <p className="hint">Semana de segunda a domingo. Por omissão, a última semana completa.</p>
         <div className={s.semana}>
           <button type="button" className="btn ghost" onClick={() => irPara(semanaAnterior(segunda))}>‹ Semana anterior</button>
@@ -243,12 +380,7 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
           <button type="button" className="btn ghost" onClick={() => irPara(semanaSeguinte(segunda))}>Semana seguinte ›</button>
         </div>
         <p className={s.rotulo}><strong>{rotuloSemana(segunda)}</strong></p>
-      </details>
-
-      {/* b. Registo */}
-      <details className="card dobra" open>
-        <summary><h2 id={id("h-registo")}>Registo</h2></summary>
-        <p className="hint">Os registos ficam só neste browser. Exporte uma cópia de segurança regularmente.</p>
+        <p className="hint">Os valores vêm do Excel; corrija aqui o que for preciso e guarde.</p>
         {epocaCritica && (
           <p className={s.nota} role="note">Esta semana está na época crítica dos CSP (15/11 a 31/01).</p>
         )}
@@ -364,78 +496,11 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
         <p className={s.estado} role="status" aria-live="polite">{msgRegisto}</p>
       </details>
 
-      {/* c. Enviar */}
-      <details className="card dobra" open>
-        <summary><h2 id={id("h-envio")}>Enviar à DE-SNS</h2></summary>
-        <p className="hint">Texto com os 11 campos desta semana, tal como está no formulário (guardado ou não).</p>
-        <textarea id={id("previa")} className={s.previa} readOnly rows={12} value={textoEnvio} aria-label="Pré-visualização do e-mail" />
+      {/* 5. Cópia de segurança */}
+      <details className="card dobra">
+        <summary><h2 id={id("h-copia")}>5. Cópia de segurança</h2></summary>
+        <p className="hint">Os registos ficam só neste browser. Exporte uma cópia regularmente e importe-a noutro computador.</p>
         <div className={s.acoes}>
-          <button
-            type="button"
-            className="btn"
-            onClick={async () => setMsgEnvio(await copiarTexto(textoEnvio))}
-          >
-            Copiar texto
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={async () => setMsgEnvio(await copiarTabela(tabelaHtml([{ ...form, semana: segunda }]), textoEnvio))}
-          >
-            Copiar tabela
-          </button>
-        </div>
-        <p className={s.estado} role="status" aria-live="polite">{msgEnvio}</p>
-      </details>
-
-      {/* d. Histórico */}
-      <details className="card dobra" open>
-        <summary><h2 id={id("h-hist")}>Histórico</h2></summary>
-        {todos.length === 0 ? (
-          <p className="hint">Ainda não há semanas guardadas neste browser.</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="uls-table">
-              <thead>
-                <tr><th scope="col">Semana</th><th scope="col">Nível hospitalar</th><th scope="col">Camas livres / macas</th><th scope="col">CSP</th><th scope="col">USP</th><th scope="col"><span className="sr-only">Ações</span></th></tr>
-              </thead>
-              <tbody>
-                {todos.map((r) => (
-                  <tr key={r.semana}>
-                    <th scope="row">{rotuloSemana(r.semana)}</th>
-                    <td data-label="Nível hospitalar"><span className={`dgs-badge dgs-${r.cuidadosNivel}`}>{DGS_TEXT[r.cuidadosNivel]}</span></td>
-                    <td data-label="Camas / macas">{r.camasLivres ?? "—"}/{r.macasLivres ?? "—"}</td>
-                    <td data-label="CSP">{r.cspDoentesMedicoHora != null ? `${numPt(r.cspDoentesMedicoHora)} doentes/médico/h` : curto(r.cspAfluencia)}</td>
-                    <td data-label="USP">{curto(r.uspTexto)}</td>
-                    <td>
-                      <div className={s.acoesLinha}>
-                        <button type="button" className="btn ghost" onClick={() => { if (podeSair()) { setSegunda(r.semana); setForm(r); setMsgRegisto(""); window.scrollTo({ top: 0 }); } }} aria-label={`Abrir ${rotuloSemana(r.semana)}`}>Abrir</button>
-                        <button type="button" className="btn danger" onClick={() => apagar(r.semana)} disabled={!storeOk} aria-label={`Apagar ${rotuloSemana(r.semana)}`}>Apagar</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className={s.periodo}>
-          <div className={s.campo}>
-            <label htmlFor={id("periodo")}>Período do relatório</label>
-            <select id={id("periodo")} value={periodoIdx} onChange={(e) => setPeriodoIdx(Number(e.target.value))}>
-              {periodos.map((p, i) => <option key={p.nome} value={i}>{p.nome} · {p.de.split("-").reverse().join("/")} a {p.ate.split("-").reverse().join("/")} (envio até {p.prazo})</option>)}
-            </select>
-          </div>
-          <ul className={s.resumo} aria-label="Resumo do período">
-            <li>Semanas com registo: <strong>{resumo.semanas}</strong></li>
-            {NIVEIS_TEXTO.map((t, n) => <li key={t}>{t} (nível {n}): <strong>{resumo.porNivel[n]}</strong></li>)}
-            <li>Semanas em nível 2 ou 3: {resumo.semanasAlto.length ? resumo.semanasAlto.map((x) => rotuloSemana(x)).join("; ") : "nenhuma"}</li>
-          </ul>
-        </div>
-
-        <div className={s.acoes}>
-          <button type="button" className="btn" onClick={copiarPeriodo}>Copiar tabela do período</button>
           <button type="button" className="btn ghost" onClick={exportar}>Exportar cópia (.json)</button>
           <label className={`btn ghost ${s.ficheiro}`} aria-disabled={!storeOk}>
             Importar cópia (.json)
@@ -450,12 +515,6 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos 
           </label>
         </div>
         <p className={s.estado} role="status" aria-live="polite">{msgHistorico}</p>
-      </details>
-
-      {/* e. Relacionar */}
-      <details className="card dobra" open>
-        <summary><h2 id={id("h-relacionar")}>Relacionar variáveis</h2></summary>
-        <RelacionarVariaveis registos={todos} publicos={publicos} />
       </details>
     </div>
   );

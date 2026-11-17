@@ -20,15 +20,15 @@ O desenho do projeto (território, níveis de risco, páginas e fontes) está em
 | Open-Meteo | Temperatura e UV (Porto e Gondomar); qualidade do ar (PM10, PM2,5, ozono) e pólen | Horária |
 | `data/su-local.xlsx` | Afluência diária ao SU (idades, diagnósticos, internamento, origem, temperatura) | Manual |
 
-Os dados da equipa (ficheiros de mortalidade, alertas e afluência) não entram no repositório: são carregados no browser, na página Vigilância da equipa.
+Os dados da equipa não entram no repositório: o Excel semanal é lido só no browser, na página Relatórios, e fica guardado nesse browser.
 
 ## Páginas
 
-- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsado, o contexto regional (ARS Norte).
-- **Painel de risco** (`/painel`): nível 0–3 do Plano Sazonal 2026–2027 (DGS, p. 20) com a procura do SU e a ocupação da ULSSA, e faixa dos últimos 12 meses publicados.
-- **Flags de IA** (`/flags-ia`): sinais propostos por um modelo de linguagem a partir dos indicadores da ULSSA, FRIESA, óbitos regionais e avisos do Porto.
-- **Exportar** (`/exportar`): Excel com as variáveis escolhidas e o período (`/api/exportar`).
-- **Relatórios** (`/relatorios`): registo semanal para a DE-SNS, com texto e tabela para copiar e histórico por período. Fica só no browser; exporte cópias `.json`.
+- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsado, o gerador de textos de alerta da equipa. O botão «Exportar Excel» descarrega todas as variáveis do período (`/api/exportar`).
+- **Relatórios** (`/relatorios`): a USP larga o Excel da semana ([modelo](/api/modelo-semanal): folhas Hospital, CSP, USP, Laboratório e Indicadores diários) e sai a tabela de Monitorização Semanal para a DE-SNS e o texto do e-mail, prontos a copiar. Pode rever cada semana e exportar cópias `.json`.
+- **Workspace** (`/workspace`): estudos com as semanas carregadas (matriz, laboratório e indicadores diários) e séries públicas (ÍCARO, FRIESA, óbitos, urgências da Região Norte): até 6 variáveis no mesmo gráfico, matriz de correlação, comentário da IA (só agregados) e estudos guardados. «Experimentar com semanas fictícias» usa `public/demo/semanas_FICTICIO.json` (`npm run demo`).
+
+Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analise`) redirecionam para estas páginas.
 
 ## Níveis e alertas
 
@@ -59,9 +59,9 @@ O `vercel.json` agenda um cron diário (07:00 UTC) para `/api/revalidate`. A rot
 1. Substituir `data/su-local.xlsx` por um Excel com as mesmas colunas.
 2. A Vercel volta a construir a página; o script `scripts/import-excel.mjs` converte o Excel em JSON.
 
-## Ficheiro mensal da ULSSA
+## Ficheiro semanal da ULSSA
 
-Modelo para a equipa: [/api/modelo-mensal](/api/modelo-mensal) descarrega um Excel em branco com as 5 folhas (SU_diario, SU_diagnosticos, Internamento, CSP_mensal, CSP_ICPC2) e as instruções. Um ficheiro por mês, só com totais; "<5" é aceite para contagens pequenas. Na página Vigilância da equipa, o ficheiro é lido só no browser e os meses juntam-se por data (o mais recente ganha em datas repetidas). Não há armazenamento nem envio para o servidor.
+Um ficheiro por semana (segunda a domingo), descarregado em [/api/modelo-semanal](/api/modelo-semanal). Cada equipa preenche só a coluna Valor da sua folha; a folha «Indicadores diários» leva uma linha por dia e aceita colunas extra com números. Só totais agregados. A leitura (`lib/semanal.ts`) avisa de campos vazios ou inválidos; não há envio para o servidor.
 
 ## Desenvolvimento
 
@@ -69,10 +69,11 @@ Modelo para a equipa: [/api/modelo-mensal](/api/modelo-mensal) descarrega um Exc
 npm install
 npm run dev
 npx tsc --noEmit
-node scripts/selfcheck-uls.mjs   # verificação da lógica por ULS, DGS, faixa mensal, ar/pólen/UV e flags de IA
+node scripts/selfcheck-uls.mjs        # lógica por ULS, DGS, faixa mensal, ar/pólen/UV e flags de IA
+node scripts/selfcheck-semanal.mjs    # modelo semanal → Excel → leitura, e tabelas do Workspace
 npm run build
 ```
 
 Dependências sem vulnerabilidades conhecidas. O `postcss` usado pelo Next.js é forçado para a versão corrigida via `overrides`.
 
-Sistema de design: Atkinson Hyperlegible, tokens com modo escuro e contraste AA.
+Sistema de design: Roboto, azul e amarelo da Saúde Sazonal da ULSSA, tokens com modo escuro e contraste AA.

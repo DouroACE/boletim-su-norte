@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import type { Aviso, Point } from "@/lib/sources";
 import { gerarAlerta, nivelDeAviso, perigoDeAviso, type Alerta, type AlertaInput, type Fonte, type Nivel, type Perigo } from "@/lib/alertas";
 import { fmtDate } from "@/components/ui";
-import s from "@/app/alertas/alertas.module.css";
+import s from "@/components/alertas.module.css";
 
 const PERIGOS: [Perigo, string][] = [
   ["calor", "Calor"],

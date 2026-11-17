@@ -3,7 +3,7 @@ import writeExcelFile from "write-excel-file/node";
 import { fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchEvmNorte, fetchMeteo, fetchUlsNorte, fetchUlssaMensal, PORTO, GONDOMAR, type Point, type Meteo } from "@/lib/sources";
 import { parseRange } from "@/lib/flags";
 import { addDays } from "@/lib/stats";
-import { buildSheets, parseVars } from "@/lib/export";
+import { buildSheets, parseVars, VARIAVEIS } from "@/lib/export";
 import type { MonthVal } from "@/lib/uls";
 
 export const dynamic = "force-dynamic";
@@ -15,14 +15,9 @@ const ULSSA = "santo-antonio";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const today = new Date().toISOString().slice(0, 10);
-  const vars = parseVars(url.searchParams.getAll("v"));
-  if (!vars.length) {
-    // Volta ao formulário (mesmo período) com a mensagem de erro junto ao botão.
-    const back = new URL("/exportar", url);
-    for (const k of ["de", "ate"]) if (url.searchParams.get(k)) back.searchParams.set(k, url.searchParams.get(k)!);
-    back.searchParams.set("erro", "variaveis");
-    return Response.redirect(back, 303);
-  }
+  // Sem variáveis escolhidas exporta todas (o botão do boletim não pede escolha).
+  const escolhidas = parseVars(url.searchParams.getAll("v"));
+  const vars = escolhidas.length ? escolhidas : VARIAVEIS;
   const range = parseRange({ de: url.searchParams.get("de") ?? undefined, ate: url.searchParams.get("ate") ?? undefined }, today) ?? { from: addDays(today, -89), to: today };
   const want = new Set(vars.map((v) => v.id));
   const has = (...ids: string[]) => ids.some((i) => want.has(i));

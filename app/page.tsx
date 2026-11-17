@@ -12,6 +12,8 @@ import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, D
 import { DGS_TEXT, dgsLevel, dgsToLevel, worstOf, uvLabel, airLabel, polenDia, ateMes, LIMIAR_OCUPACAO, LIMIAR_PROCURA, type DgsLevel, type AirDay } from "@/lib/risk";
 import { compareHomologous } from "@/lib/uls";
 import { Imprimir, RodapeImpressao } from "@/components/imprimir";
+import { Navegacao } from "@/components/nav";
+import { AlertasGerador } from "@/components/alertas";
 import { perigosAtivos, recomendacoes, TIPO_AVISO } from "@/lib/alertas";
 
 export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinha com dados novos
@@ -177,19 +179,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       </header>
       <RodapeImpressao />
 
-      <nav className="toc" aria-label="Secções do site">
-        <div className="wrap">
-          <ul>
-            <li><a href={`/${rangeQuery(range)}`} aria-current="page">Boletim</a></li>
-            <li><a href={`/painel${rangeQuery(range)}`}>Painel de risco →</a></li>
-            <li><a href="/analise">Vigilância da equipa →</a></li>
-            <li><a href="/alertas">Alertas →</a></li>
-            <li><a href="/relatorios">Relatórios →</a></li>
-            <li><a href={`/flags-ia${rangeQuery(range)}`}>Flags de IA →</a></li>
-            <li><a href={`/exportar${rangeQuery(range)}`}>Exportar →</a></li>
-          </ul>
-        </div>
-      </nav>
+      <Navegacao atual="/" query={rangeQuery(range)} />
 
       <main id="conteudo" className="wrap">
         <DateFilter range={range} today={today} path="/" />
@@ -598,6 +588,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             </div>
           </details>
         </section>
+
+        {/* ALERTAS (equipa) */}
+        <details className="card dobra" id="alertas">
+          <summary><h2 id="h-gerador">Gerar textos de alerta (equipa)</h2></summary>
+          <p className="hint">Escolha um aviso do IPMA ou o boletim ÍCARO, ou indique os dados à mão. Os textos seguem as recomendações da DGS; reveja-os antes de enviar.</p>
+          <AlertasGerador avisos={avisosPto ?? []} icaro={icaro.value?.at(-1) ?? null} />
+        </details>
 
         {/* METODOLOGIA */}
         <section id="metodologia" aria-labelledby="h-met2">

@@ -1,4 +1,4 @@
-/* Painéis automáticos dos ficheiros da equipa (components/analise-modelos.tsx). As cores DGS vêm de globals.css (.dgs-0 … .dgs-3). */
+/* Gráficos de séries e matriz de correlação (components/analise.tsx). */
 .painel { display: grid; gap: 14px; align-content: start; }
 .topo { display: grid; gap: 12px; }
 .leitura { font-size: 17px; font-weight: 700; margin: 0; }
@@ -40,3 +40,5 @@
 .celula { min-width: 84px; font-variant-numeric: tabular-nums; }
 .celula small { display: block; font-size: 11px; color: var(--ink-3); }
 @media (min-width: 640px) { .controlos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.legendaGrupos { margin: 12px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.escolha + .escolha { margin-top: 8px; }

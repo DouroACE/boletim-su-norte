@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { fetchFriesaPorto, fetchIcaro, fetchIpmaAvisos, fetchNorte, fetchObitosDiarios, type Aviso } from "@/lib/sources";
+import { fetchFriesaPorto, fetchIcaro, fetchIpmaAvisos, type Aviso } from "@/lib/sources";
+import { Navegacao } from "@/components/nav";
 import { Fonte } from "@/components/ui";
 import { RelatoriosSemanais } from "@/components/relatorios";
 
@@ -16,23 +17,11 @@ export default async function RelatoriosPage() {
   const hoje = now.toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
   const desde = new Date(now.getTime() - DIAS_HISTORICO * 864e5).toISOString().slice(0, 10);
 
-  const [icaro, friesa, avisos, norte, obitos] = await Promise.all([
+  const [icaro, friesa65, avisos] = await Promise.all([
     orNull(fetchIcaro(desde)),
-    orNull(fetchFriesaPorto(desde)),
+    orNull(fetchFriesaPorto(desde).then((r) => r.mais65)),
     orNull(fetchIpmaAvisos().then((a): Aviso[] => a.filter((x) => x.distrito === "Porto"))),
-    orNull(fetchNorte(desde)),
-    orNull(fetchObitosDiarios(desde)),
   ]);
-  const friesa65 = friesa?.mais65 ?? null;
-  // Séries públicas diárias que o bloco «Relacionar variáveis» oferece ao lado dos registos semanais.
-  const publicos = [
-    { nome: "Índice ÍCARO", pts: icaro },
-    { nome: "Índice FRIESA Porto (65+)", pts: friesa65 },
-    { nome: "Índice FRIESA Porto (geral)", pts: friesa?.geral ?? null },
-    { nome: obitos?.norte === false ? "Óbitos certificados por dia (Portugal, SICO)" : "Óbitos por dia, Região Norte (eVM)", pts: obitos?.pontos ?? null },
-    { nome: "Episódios de urgência, Região Norte", pts: norte?.episodios ?? null },
-    { nome: "% urgências respiratórias, Região Norte", pts: norte?.pctRespiratoria ?? null },
-  ];
 
   return (
     <>
@@ -42,29 +31,20 @@ export default async function RelatoriosPage() {
           <div>
             <div className="eyebrow">Saúde Pública · ULS Santo António</div>
             <h1>Relatórios</h1>
-            <p className="sub">Registo semanal para a DE-SNS (segunda a domingo), com texto para e-mail e tabela, e histórico para os relatórios intercalar e final.</p>
+            <p className="sub">Largue o Excel da semana e sai a tabela de Monitorização Semanal para a DE-SNS, pronta a copiar.</p>
           </div>
         </div>
       </header>
 
-      <nav className="toc" aria-label="Navegação">
-        <div className="wrap">
-          <ul>
-            <li><a href="/">← Boletim</a></li>
-            <li><a href="/painel">Painel</a></li>
-            <li><a href="/analise">Vigilância</a></li>
-            <li><a href="/alertas">Alertas</a></li>
-          </ul>
-        </div>
-      </nav>
+      <Navegacao atual="/relatorios" />
 
       <main id="conteudo" className="wrap">
-        <RelatoriosSemanais hojeIso={hoje} icaro={icaro} friesa65={friesa65} avisos={avisos} publicos={publicos} />
+        <RelatoriosSemanais hojeIso={hoje} icaro={icaro} friesa65={friesa65} avisos={avisos} />
 
         <details className="card dobra">
-          <summary><h2 id="h-fontes">Fontes</h2></summary>
+          <summary><h2 id="h-fontes">Fontes da sugestão de USP</h2></summary>
           <p className="hint">A sugestão usa os valores públicos da semana; a classificação e o texto final são da equipa.</p>
-          <Fonte ids={["icaro", "friesa", "ipmaAvisos", "gripal", obitos?.norte === false ? "obitos" : "evm"]} />
+          <Fonte ids={["icaro", "friesa", "ipmaAvisos"]} />
         </details>
       </main>
 

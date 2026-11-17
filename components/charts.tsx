@@ -202,22 +202,3 @@ export function SimpleLine({ data, unit, label, color = "var(--c1)", digits = 2 
   );
 }
 
-/** Linhas de percentagem por semana (uma linha por série; valores nulos ficam em falta). */
-export function PctLineChart({ data, lines, title }: { data: Record<string, string | number | null>[]; lines: { key: string; name: string; color: string }[]; title: string }) {
-  return (
-    <div className="chart" role="img" aria-label={title}>
-      <ResponsiveContainer>
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-          {grid}
-          <XAxis dataKey="semana" {...axis} tickFormatter={shortDate} minTickGap={28} />
-          <YAxis {...axis} width={44} tickFormatter={nf(0)} unit="%" domain={[0, "auto"]} />
-          <Tooltip {...tip} labelFormatter={(l) => `Semana de ${shortDate(String(l))}`} formatter={(v) => `${nf(1)(v)} %`} />
-          <Legend wrapperStyle={{ fontSize: 13 }} formatter={legendFmt} />
-          {lines.map((l) => (
-            <Line key={l.key} dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}

@@ -39,7 +39,13 @@ export type RegistoSemanal = {
   equipamentoTexto: string;
   /** Campo 11 */
   observacoes: string;
+  /** Do ficheiro semanal (opcionais): testes do laboratório na semana e a folha de indicadores diários, para o Workspace. */
+  laboratorio?: Record<string, number>;
+  diario?: Diario;
 };
+
+/** Folha «Indicadores diários»: cabeçalhos e linhas (data AAAA-MM-DD, números ou null). */
+export type Diario = { colunas: string[]; linhas: (string | number | null)[][] };
 
 const DIA = 864e5;
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -251,6 +257,18 @@ const nivelOk = (x: unknown): x is Nivel => x === 0 || x === 1 || x === 2 || x =
 const textoOk = (x: unknown): x is string => typeof x === "string" && x.length <= MAX_TEXTO;
 const numOuNulo = (x: unknown): x is number | null => x === null || (typeof x === "number" && Number.isFinite(x) && x >= 0);
 
+const laboratorioOk = (x: unknown) =>
+  !!x && typeof x === "object" && !Array.isArray(x) && Object.keys(x).length <= 20 &&
+  Object.entries(x).every(([k, v]) => k.length <= 80 && typeof v === "number" && Number.isFinite(v) && v >= 0);
+const celulaDiariaOk = (v: unknown) => v === null || (typeof v === "number" && Number.isFinite(v)) || (typeof v === "string" && isoValido(v));
+function diarioOk(x: unknown): boolean {
+  if (!x || typeof x !== "object") return false;
+  const { colunas, linhas } = x as { colunas?: unknown; linhas?: unknown };
+  return Array.isArray(colunas) && colunas.length <= 40 && colunas.every((c) => typeof c === "string" && c.length <= 80) &&
+    Array.isArray(linhas) && linhas.length <= 31 &&
+    linhas.every((l) => Array.isArray(l) && l.length === colunas.length && l.every(celulaDiariaOk));
+}
+
 /** Devolve o registo se todos os campos tiverem o tipo e os valores esperados; senão null. */
 export function normalizarRegisto(x: unknown): RegistoSemanal | null {
   if (!x || typeof x !== "object") return null;
@@ -266,7 +284,9 @@ export function normalizarRegisto(x: unknown): RegistoSemanal | null {
     (o.referenciacoes === "Sim" || o.referenciacoes === "Não") &&
     numOuNulo(o.camasLivres) && numOuNulo(o.macasLivres) &&
     (EQUIPAMENTO as readonly unknown[]).includes(o.equipamento) && textoOk(o.equipamentoTexto) &&
-    textoOk(o.observacoes);
+    textoOk(o.observacoes) &&
+    (o.laboratorio === undefined || laboratorioOk(o.laboratorio)) &&
+    (o.diario === undefined || diarioOk(o.diario));
   return ok ? (o as unknown as RegistoSemanal) : null;
 }
 

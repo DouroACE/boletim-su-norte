@@ -33,14 +33,6 @@ const g = groupByUls([
 assert.deepEqual(g.get("matosinhos"), [{ mes: "2026-10", valor: 82 }]);
 console.log("selfcheck-uls: ok");
 
-const { parseAiFlags } = await import("../lib/ai.ts");
-const ind = [{ id: "obitos:braga", label: "x", level: "atencao", detail: "" }, { id: "resp", label: "y", level: "normal", detail: "" }];
-const p = parseAiFlags('Aqui vai: {"flags":[{"indicadores":["obitos:braga","inventado"],"titulo":"A"},{"indicadores":["resp"],"titulo":"B"},{"indicadores":["nada"],"titulo":"C"}]}', ind);
-assert.deepEqual(p.map((f) => [f.titulo, f.level, f.indicadores.join()]), [["A", "atencao", "obitos:braga"], ["B", "info", "resp"]]);
-assert.deepEqual(parseAiFlags("sem json", ind), []);
-console.log("selfcheck-ai-flags: ok");
-assert.deepEqual(parseAiFlags('```json\n{"flags":[{"indicadores":["[obitos:braga]"],"titulo":"D"}]}\n```', ind).map((f) => f.indicadores[0]), ["obitos:braga"]);
-console.log("selfcheck-ai-flags (ids com parênteses): ok");
 
 const { rangeFlag } = await import("../lib/stats.ts");
 // 6 épocas de série constante 100 com ruído; pico de 200 em janeiro da última época → Alerta com dias contados

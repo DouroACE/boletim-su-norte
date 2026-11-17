@@ -1,4 +1,4 @@
-// Verificação de juntarTabelas/tabelaDePontos (bloco «Relacionar variáveis»): `node scripts/selfcheck-relacionar.mjs`
+// Verificação de juntarTabelas/tabelaDePontos (Workspace): `node scripts/selfcheck-juntar-tabelas.mjs`
 import assert from "node:assert/strict";
 import { juntarTabelas, tabelaDePontos, aggregateByDate } from "../lib/analise.ts";
 
@@ -24,4 +24,7 @@ assert.deepEqual(media(1), [1, 2]);
 assert.deepEqual(media(2), [1, 3]);
 
 assert.deepEqual(juntarTabelas([]), { nRows: 0, columns: [{ name: "Data", type: "date", values: [] }] });
-console.log("selfcheck-relacionar: ok");
+// Coluna numérica só com vazios fica de fora.
+const soVazios = { nRows: 1, columns: [{ name: "Data", type: "date", values: [d("2026-01-05")] }, { name: "Z", type: "number", values: [null] }, { name: "W", type: "number", values: [2] }] };
+assert.deepEqual(juntarTabelas([{ prefixo: "", table: soVazios }]).columns.map((c) => c.name), ["Data", "W"]);
+console.log("selfcheck-juntar-tabelas: ok");
