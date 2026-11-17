@@ -1,4 +1,5 @@
 import type { Level } from "@/lib/stats";
+import { FONTES, type FonteId } from "@/lib/sources";
 
 export const LEVEL_TEXT: Record<Level | "info", string> = {
   normal: "Normal",
@@ -71,3 +72,23 @@ export const fmt = (n: number | null | undefined, d = 0) =>
 
 export const fmtDate = (iso: string, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) =>
   new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon", ...opts });
+
+
+/** Linha "Fonte:" debaixo de cada gráfico/esquema. */
+export function Fonte({ ids, extra }: { ids: FonteId[]; extra?: string }) {
+  return (
+    <p className="fonte">
+      <span>Fonte:</span>{" "}
+      {ids.map((id, i) => {
+        const f: { nome: string; url?: string } = FONTES[id];
+        return (
+          <span key={id}>
+            {i > 0 && "; "}
+            {f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.nome}</a> : f.nome}
+          </span>
+        );
+      })}
+      {extra && <>. {extra}</>}
+    </p>
+  );
+}

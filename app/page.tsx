@@ -7,7 +7,8 @@ import { analyseLocal, local } from "@/lib/local";
 import { aiSummary } from "@/lib/ai";
 import { regionalFlags, historySince, parseRange, rangeQuery, type Range } from "@/lib/flags";
 import { DateFilter } from "@/components/date-filter";
-import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, fmt, fmtDate } from "@/components/ui";
+import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, Fonte, fmt, fmtDate } from "@/components/ui";
+import type { FonteId } from "@/lib/sources";
 import { UlsMap } from "@/components/uls-map";
 import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, type SeasonRow } from "@/components/charts";
 
@@ -16,6 +17,8 @@ export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinh
 const REGIAO = process.env.REGIAO_ARS || "ARS Norte";
 const INSTITUICAO = process.env.INSTITUICAO_SNS || "Unidade Local de Saúde de Santo António, EPE";
 const SNS_URL = "https://transparencia.sns.gov.pt/explore/dataset/";
+
+const KPI_FONTE: Record<string, FonteId> = { internamento: "sazonal", friesa: "friesa", obitos: "obitos" };
 
 const lastOf = (p: Point[] | null | undefined) => p?.at(-1)?.date;
 
@@ -166,6 +169,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               </div>
             </div>
             <ul>{summary.text.map((t, i) => <li key={i}>{t}</li>)}</ul>
+            <Fonte ids={["gripal", "sazonal", "friesa", "obitos", "ipmaAvisos"]} extra={summary.generated === "ia" ? `Texto redigido por ${summary.model} a partir destes números` : undefined} />
           </article>
         </section>
 
@@ -198,6 +202,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
                 </div>
                 <Sparkline values={(range ? inRange(series[f.id]) : series[f.id].slice(-60)).map((p) => p.value)} label={`Evolução ${range ? "no período escolhido" : "dos últimos 60 dias"}: ${f.label}`} />
                 <p className="kpi-note">{f.note}</p>
+                <Fonte ids={[KPI_FONTE[f.id] ?? "gripal"]} />
               </article>
             ))}
           </div>
@@ -214,11 +219,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               <h3>Episódios de urgência por dia · {REGIAO.replace("ARS ", "")}</h3>
               <p className="hint">Estimativa diária da rede de urgência hospitalar.</p>
               {N ? <SeasonChart data={epiRows} unit="episódios" title="Episódios de urgência por dia: época atual, anterior e linha de base" /> : <p className="hint">Fonte indisponível.</p>}
+              <Fonte ids={["gripal"]} />
             </article>
             <article className="card">
               <h3>Urgências com diagnóstico de infeção respiratória (%)</h3>
               <p className="hint">Proporção de episódios com infeção respiratória codificada.</p>
               {N ? <SeasonChart data={respRows} unit="%" digits={1} title="Percentagem de urgências com infeção respiratória: época atual, anterior e linha de base" /> : <p className="hint">Fonte indisponível.</p>}
+              <Fonte ids={["gripal"]} />
             </article>
           </div>
           {manchester.value && manchester.value.length > 0 && (
@@ -226,6 +233,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               <h3>Atendimentos mensais por prioridade de triagem · {INSTITUICAO.replace(", EPE", "")}</h3>
               <p className="hint">Triagem de Manchester. Publicação mensal, com alguns meses de atraso. A SPMS publica totais acumulados no ano; aqui estão convertidos em valores mensais.</p>
               <ManchesterChart data={manchester.value} />
+              <Fonte ids={["manchester"]} />
             </article>
           )}
         </section>
@@ -240,6 +248,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <div className="grid g-map">
               <article className="card">
                 <UlsMap rows={U} />
+                <Fonte ids={["obitosInst", "urgUls", "tempos", "osm"]} />
               </article>
               <article className="card table-card">
                 <h3>Indicadores por ULS</h3>
@@ -271,6 +280,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
                   Variação face ao mesmo mês do ano anterior. V+L = % de atendimentos com triagem vermelha ou laranja.
                   Os óbitos SICO contam só os certificados emitidos nas unidades da ULS (sobretudo óbitos hospitalares), não a residência.
                 </p>
+                <Fonte ids={["obitosInst", "urgUls", "manchester"]} />
               </article>
             </div>
           ) : (
@@ -318,20 +328,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
                   </div>
                 </>
               )}
+              <Fonte ids={["ipmaAvisos", "ipmaPrev"]} />
             </article>
             <article className="card">
               <h3>Temperatura no Porto · {range ? "período escolhido" : "últimos 45 dias e próximos 7"}</h3>
               {meteoRange?.length ? <MeteoChart data={meteoRange} today={today} /> : <p className="hint">{range ? "Sem temperatura observada para este período (a fonte só guarda os últimos 45 dias)." : "Fonte indisponível."}</p>}
+              <Fonte ids={["meteo"]} />
             </article>
             <article className="card">
               <h3>Índice FRIESA · Porto (65+ anos)</h3>
               <p className="hint">Impacto previsto do frio na mortalidade. Publicado sobretudo entre novembro e março.</p>
               {friesa.value?.mais65.length ? <SimpleLine data={range ? inRange(friesa.value.mais65) : friesa.value.mais65.filter((p) => p.date >= sinceShort)} unit="" label="Índice FRIESA Porto 65+" color="var(--c4)" /> : <p className="hint">Sem dados.</p>}
+              <Fonte ids={["friesa"]} />
             </article>
             <article className="card">
               <h3>Índice ÍCARO · calor</h3>
               <p className="hint">Impacto previsto do calor na mortalidade. Publicado sobretudo entre maio e setembro.</p>
               {icaroRecent.length ? <SimpleLine data={icaroRecent} unit="" label="Índice ÍCARO" color="var(--c3)" /> : <p className="hint">Sem dados.</p>}
+              <Fonte ids={["icaro"]} />
             </article>
           </div>
         </section>
@@ -373,23 +387,28 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
               <article className="card">
                 <h3>Afluência diária e temperatura média</h3>
                 <LocalDailyChart data={L.daily} />
+                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
               </article>
               <div className="grid g-2">
                 <article className="card">
                   <h3>Diagnósticos infecciosos por semana</h3>
                   <WeeklyDiagChart data={L.weekly} />
+                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
                 </article>
                 <article className="card">
                   <h3>Média de episódios por dia da semana</h3>
                   <DowChart data={L.byDow} />
+                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
                 </article>
                 <article className="card">
                   <h3>Distribuição por grupo etário</h3>
                   <HBarChart data={L.idades} x="pct" y="grupo" label="Percentagem de episódios por grupo etário" />
+                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
                 </article>
                 <article className="card">
                   <h3>Área de residência</h3>
                   <HBarChart data={L.origens} x="pct" y="origem" label="Percentagem de episódios por área de residência" />
+                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
                 </article>
               </div>
             </div>

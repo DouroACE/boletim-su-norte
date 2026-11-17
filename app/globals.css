@@ -299,3 +299,8 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
   .bullet-track { grid-column: 1 / -1; grid-row: 2; }
   .bullet-value { grid-row: 1; grid-column: 2; }
 }
+
+/* Linha de fonte debaixo de cada gráfico */
+.fonte { font-size: 12px; line-height: 1.5; color: var(--ink-3); margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.fonte > span:first-child { font-weight: 700; }
+.fonte a { color: var(--ink-2); text-underline-offset: 2px; }
