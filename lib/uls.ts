@@ -74,14 +74,14 @@ export function compareHomologous(serie: MonthVal[], mode: "poisson" | "pct"): U
   const last = serie.at(-1)!;
   const h = serie.find((s) => s.mes === prevYear(last.mes))?.valor ?? null;
   if (!Number.isFinite(last.valor) || (h != null && !Number.isFinite(h))) {
-    return { ...EMPTY, mes: last.mes, valor: Number.isFinite(last.valor) ? last.valor : null, suspeito: true, serie: serie.slice(-13) };
+    return { ...EMPTY, mes: last.mes, valor: Number.isFinite(last.valor) ? last.valor : null, suspeito: true, serie };
   }
   const varPct = h ? ((last.valor - h) / h) * 100 : null;
   const z = h && mode === "poisson" ? (last.valor - h) / Math.sqrt(h) : null;
   let level: Level = "sem-dados";
   if (mode === "poisson" && z != null) level = z >= 3 ? "alerta" : z >= 2 ? "atencao" : "normal";
   if (mode === "pct" && varPct != null) level = varPct >= 20 ? "alerta" : varPct >= 10 ? "atencao" : "normal";
-  return { mes: last.mes, valor: last.valor, homologo: h, varPct, z, level, serie: serie.slice(-13) };
+  return { mes: last.mes, valor: last.valor, homologo: h, varPct, z, level, serie };
 }
 
 /** Soma valores por ULS e mês, descartando o mês corrente (ainda incompleto). */
