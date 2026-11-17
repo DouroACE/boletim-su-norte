@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { axis, grid, tip, nf, shortDate } from "@/components/charts";
 import { parseCSV, toTable, retype, aggregateByDate, correlate, summarize, type Table, type ColType, type Period, type AggFn, type Pt, type Column } from "@/lib/analise";
+import { detectarModelo, type PredefCorr } from "@/lib/modelos";
+import { PainelModelo, QualidadeDados } from "@/components/analise-modelos";
 
 type Tab = { nome: string; table: Table };
 type StoredCol = { name: string; type: ColType; values: (string | number | null)[] };
@@ -289,6 +291,17 @@ export function Analise() {
     setEstado("");
   }
 
+  /** Preenche a secção Correlação com os parâmetros de uma predefinição de modelo. */
+  function aplicarPredef(p: PredefCorr) {
+    setXKey(p.x);
+    setYKey(p.y);
+    setPeriodo(p.periodo);
+    setFuncao(p.funcao);
+    setMaxLag(p.maxLag);
+    document.getElementById("h-corr")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  const modelos = tabs.map((t) => detectarModelo(t.table));
+
   async function analisarIa() {
     if (!corr) return;
     setIa({ estado: "a-gerar" });
@@ -388,6 +401,7 @@ export function Analise() {
         <section key={ti} aria-labelledby={`h-tab-${ti}`} className="card">
           <h2 id={`h-tab-${ti}`}>{t.nome}</h2>
           <p className="hint">{t.table.nRows} registos · {t.table.columns.length} colunas</p>
+          {modelos[ti] && <PainelModelo modelo={modelos[ti]} tabelas={tabs} ti={ti} aplicar={aplicarPredef} />}
           <div className="table-wrap">
             <table className="col-table">
               <caption className="sr-only">Colunas de {t.nome} e tipo detetado</caption>
@@ -410,6 +424,7 @@ export function Analise() {
               </tbody>
             </table>
           </div>
+          <QualidadeDados table={t.table} />
 
           {t.table.columns.some((c) => c.type === "date") ? (
             <>

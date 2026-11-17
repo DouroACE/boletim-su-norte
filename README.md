@@ -1,96 +1,73 @@
-# Boletim de Vigilância Sazonal · Urgência · Região Norte
+# Boletim de Vigilância Sazonal · ULS Santo António
 
-Página web viva (Next.js na Vercel) que junta os dados locais do Serviço de Urgência (Excel) a fontes públicas e gratuitas. A recolha é automática: a página volta a buscar os dados de 30 em 30 minutos a 3 em 3 horas (ISR da Next.js), sem servidor nem custos.
+Página web viva (Next.js na Vercel) para a vigilância sazonal da **ULS Santo António**, que cobre o concelho de **Gondomar** e a zona ocidental do **Porto** (ACeS Porto Ocidental). Junta os dados do Serviço de Urgência (Excel da equipa) a fontes públicas e gratuitas. A recolha é automática: a página volta a buscar os dados de 3 em 3 horas (ISR da Next.js), sem servidor próprio.
+
+O desenho do projeto (território, níveis de risco, páginas e fontes) está em [`docs/estrutura-ulssa.md`](docs/estrutura-ulssa.md).
 
 ## Fontes de dados (todas públicas)
 
 | Fonte | O que traz | Frequência |
 |---|---|---|
-| SNS Transparência · `atividade-sindrome-gripal-csh` | Episódios de urgência estimados, % com infeção respiratória, tempo triagem→1.ª observação, não urgentes/100 000 hab. (ARS Norte) | Diária |
-| SNS Transparência · `monitorizacao-sazonal-csh` | % de urgências com internamento (ARS Norte) | Diária |
-| SNS Transparência · `indice-friesa` | Índice de impacto do frio, Porto (geral e 65+) — INSA | Diária (nov–mar) |
-| SNS Transparência · `evolucao-diaria-do-indice-icaro` | Índice de impacto do calor — INSA | Diária (mai–set) |
-| SNS Transparência · `evolucao-diaria-de-certificados-de-obito` | Óbitos certificados por dia (SICO), Portugal | Diária |
-| SNS Transparência · `atendimentos-em-urgencia-triagem-manchester` | Atendimentos mensais por cor de triagem, ULS Santo António | Mensal |
-| SNS Transparência · `certificados-de-obito-por-instituicao-de-saude` | Óbitos certificados (SICO) por instituição, somados por ULS do Norte (mapa) | Mensal |
-| SNS Transparência · `atendimentos-por-tipo-de-urgencia-hospitalar-link` | Atendimentos em urgência por ULS (mapa; acumulados no ano, convertidos em mensais) | Mensal |
-| SNS Transparência · `atendimentos-em-urgencia-triagem-manchester` (todas as ULS do Norte) | % de triagem vermelha + laranja por ULS (mapa) | Mensal |
-| IPMA API aberta | Previsão diária para o Porto e avisos meteorológicos dos distritos do Norte | Horária |
-| Open-Meteo | Temperatura e precipitação observadas (45 dias) e previstas no Porto | Horária |
-| `data/su-local.xlsx` | Afluência diária ao SU (idades, diagnósticos, internamento, origem, temperatura, ÍCARO) | Manual |
+| SNS Transparência · `atendimentos-por-tipo-de-urgencia-hospitalar-link` | Atendimentos em urgência, ULS Santo António (acumulados no ano, convertidos em mensais) | Mensal |
+| SNS Transparência · `atendimentos-em-urgencia-triagem-manchester` | Atendimentos por cor de triagem, ULS Santo António | Mensal |
+| SNS Transparência · `ocupacao-do-internamento` | Taxa de ocupação hospitalar, ULS Santo António (dias de internamento ÷ lotação × dias) | Mensal |
+| SNS Transparência · `evolucao-das-consultas-medicas-nos-csp` | Consultas médicas presenciais e não presenciais, ULS Santo António | Mensal |
+| SNS Transparência · `certificados-de-obito-por-instituicao-de-saude` | Óbitos certificados (SICO) nas unidades da ULS Santo António | Mensal |
+| SNS Transparência · `evolucao-diaria-de-certificados-de-obito` | Óbitos certificados por dia, Portugal (SICO) | Diária |
+| DGS · eVM (`evm.min-saude.pt`) | Óbitos diários da Região Norte, até ontem. Não há série diária pública por ACeS | Diária |
+| SNS Transparência · `indice-friesa`, `evolucao-diaria-do-indice-icaro` | Índices FRIESA (frio, Porto) e ÍCARO (calor), INSA | Diária |
+| IPMA (API aberta) | Avisos do distrito do Porto (inclui Gondomar) e previsão para o Porto | Horária |
+| Open-Meteo | Temperatura e UV (Porto e Gondomar); qualidade do ar (PM10, PM2,5, ozono) e pólen | Horária |
+| `data/su-local.xlsx` | Afluência diária ao SU (idades, diagnósticos, internamento, origem, temperatura) | Manual |
 
-## Alertas ("flags") e padrões
+Os dados da equipa (ficheiros de mortalidade, alertas e afluência) não entram no repositório: são carregados no browser, na página Vigilância da equipa.
 
-- **Estatística** (`lib/stats.ts`): a média dos últimos 7 dias é comparada com a linha de base das 5 épocas anteriores para a mesma altura do ano (±7 dias). z ≥ 1 dá **Atenção** e z ≥ 2 dá **Alerta**.
-- **Dados locais** (`lib/local.ts`): semana de pico, pico respiratório, dias anómalos (média + 2 DP por dia da semana), correlação temperatura ↔ infeções respiratórias com desfasamento, padrão semanal e idosos.
-- **IA open-source** (`lib/ai.ts`): Llama 3.3 70B (Groq, gratuito) ou Qwen 2.5 72B (Hugging Face, gratuito) recebe só os números calculados e redige a síntese. A IA **não decide** os níveis de alerta. Sem chave configurada, o texto é gerado por regras.
+## Páginas
 
-## Mapa por ULS
+- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsado, o contexto regional (ARS Norte).
+- **Painel de risco** (`/painel`): nível 0–3 do Plano Sazonal 2026–2027 (DGS, p. 20) com a procura do SU e a ocupação da ULSSA, e faixa dos últimos 12 meses publicados.
+- **Flags de IA** (`/flags-ia`): sinais propostos por um modelo de linguagem a partir dos indicadores da ULSSA, FRIESA, óbitos regionais e avisos do Porto.
+- **Exportar** (`/exportar`): Excel com as variáveis escolhidas e o período (`/api/exportar`).
 
-Secção `#mapa` da página principal: um mapa (Leaflet + OpenStreetMap) e uma tabela com as 14 ULS da Região Norte. Para cada ULS mostra o último mês publicado de óbitos SICO e de urgências, comparado com o mesmo mês do ano anterior.
+## Níveis e alertas
 
-- **Óbitos (SICO):** teste de Poisson face ao mês homólogo. **Atenção** se z ≥ 2, **Alerta** se z ≥ 3. Conta só os certificados emitidos nas unidades da ULS (sobretudo óbitos hospitalares), não a residência.
-- **Urgências:** **Atenção** a partir de +10 %, **Alerta** a partir de +20 % face ao mês homólogo.
-- **Limite:** não há dados públicos diários por ULS. A SPMS publica o SICO por instituição e as urgências por ULS só uma vez por mês, com atraso.
-
-## Flags de IA (`/flags-ia`)
-
-O modelo (Groq/Hugging Face, as mesmas chaves da síntese) recebe a tabela de indicadores regionais e por ULS e propõe até 8 flags. Cada flag tem de citar os ids dos indicadores em que se baseia. O código descarta as flags que citem indicadores inexistentes, e o nível de cada flag é sempre o pior nível estatístico dos indicadores citados, nunca o da IA. Sem chave configurada, a página mostra as flags das regras. A tabela exata enviada ao modelo fica visível no fim da página.
-
-## Painel de risco (`/painel`)
-
-- **Medidor do nível de risco DGS (0 Verde → 3 Vermelho)** da Região Norte, calculado com a tabela de critérios assistenciais do Plano Sazonal 2026–2027 (p. 20, `lib/risk.ts`). Mostra a justificação e quantos dos 7 indicadores têm dados. Hoje só a procura do SU tem fonte pública, por isso o nível é parcial.
-- **Donut das 14 ULS** pelo pior sinal estatístico (óbitos SICO ou urgências).
-- **Barras com os limiares dos níveis 1–3** para cada indicador da DGS, tracejadas quando falta a fonte (com quem a tem).
-- **Matriz por ULS** ordenada por gravidade, com o nível DGS aplicado à procura do SU de cada ULS.
-- **Meses repetidos pela SPMS** (o acumulado de um mês igual ao anterior) ficam "A rever" em vez de gerar falsas variações.
-
-## Exportar para Excel (`/exportar`)
-
-Botão "Exportar Excel" no bloco do período, no boletim, no painel e nas flags. Abre um formulário onde se escolhem as variáveis e o período. A rota `/api/exportar?v=…&de=…&ate=…` gera um `.xlsx` com até três folhas:
-
-- **Diário:** uma linha por dia e uma coluna por variável.
-- **Mensal por ULS:** óbitos SICO e urgências, desde 2024.
-- **Fontes:** fonte e ligação de cada variável, período e data de geração.
-
-Os meses "a rever" (publicação repetida pela SPMS) saem vazios. Se uma fonte falhar, exporta as outras e regista o erro na folha "Fontes".
-
-## Filtro de datas
-
-As duas páginas aceitam `?de=AAAA-MM-DD&ate=AAAA-MM-DD`, com atalhos para 7, 30 e 90 dias e para a época atual ou anterior. Sem filtro, mostram o estado atual (últimos 7 dias contra a linha de base sazonal). Com filtro, cada indicador compara a média do período com a média do **mesmo período nos 5 anos anteriores** (um único z por período, para não multiplicar falsos alertas em períodos longos). O mapa por ULS usa o último mês publicado até à data final, e as flags de IA analisam esse período. Os avisos do IPMA só aparecem quando o período inclui hoje, porque o IPMA não publica histórico.
-
-## Plano de dados (Plano Sazonal DGS 2026–2027)
-
-[`docs/plano-dados-boletim.md`](docs/plano-dados-boletim.md) faz o levantamento das métricas do Plano Nacional de Preparação e Resposta Sazonal em Saúde 2026–2027: níveis de risco 0–3, fontes do Anexo 2 e o que é público ou tem de ser pedido. Inclui também a arquitetura e as fases para a webapp gerar os boletins semanais sozinha.
-
-## Atualização diária
-
-O `vercel.json` agenda um cron diário (07:00 UTC) para `/api/revalidate`. A rota invalida o cache de todas as fontes (`revalidateTag`) e das duas páginas, e a visita seguinte volta a recolher tudo. Isto soma-se ao ISR de 3 em 3 horas. A rota exige `CRON_SECRET`, que a Vercel envia automaticamente ao cron quando a variável está configurada.
+- **Situação da ULSSA**: o nível mais alto entre a procura do SU e a ocupação (níveis DGS: 1 → Atenção; 2 e 3 → Alerta), os avisos IPMA do distrito do Porto e o índice FRIESA. Os indicadores regionais não entram.
+- **Procura do SU**: variação dos atendimentos mensais face ao mesmo mês do ano anterior; níveis DGS 10 %, 25 % e 50 %.
+- **Ocupação**: níveis DGS 85 %, 95 % e 105 %.
+- **Óbitos SICO e regionais**: teste de Poisson face ao mesmo mês do ano anterior. Um mês que a SPMS repete na publicação fica "a rever".
+- **Linha de base sazonal** (regional, `lib/stats.ts`): média dos últimos 7 dias face às 5 épocas anteriores. z ≥ 1 dá **Atenção** e z ≥ 2 dá **Alerta**.
+- **IA** (`lib/ai.ts`): Llama 3.3 70B (Groq) ou Qwen 2.5 72B (Hugging Face) recebe só os números já calculados e redige a síntese. A IA não decide níveis. Sem chave, o texto é gerado por regras.
 
 ## Variáveis de ambiente (Vercel → Settings → Environment Variables)
 
 | Variável | Obrigatória | Para quê |
 |---|---|---|
-| `GROQ_API_KEY` | não | Chave gratuita em console.groq.com — ativa a síntese por IA |
+| `GROQ_API_KEY` | não | Chave gratuita em console.groq.com: ativa a síntese por IA |
 | `HF_TOKEN` | não | Alternativa: token gratuito do Hugging Face |
 | `GROQ_MODEL` / `HF_MODEL` | não | Trocar de modelo |
 | `CRON_SECRET` | sim, para o cron | Texto aleatório (ex.: `openssl rand -hex 32`); protege `/api/revalidate` |
-| `REGIAO_ARS` | não | Por omissão `ARS Norte` |
-| `INSTITUICAO_SNS` | não | Por omissão `Unidade Local de Saúde de Santo António, EPE` |
+| `REGIAO_ARS` | não | Região do contexto regional. Por omissão `ARS Norte` |
+| `INSTITUICAO_SNS` | não | Instituição da triagem de Manchester. Por omissão `Unidade Local de Saúde de Santo António, EPE` |
+
+## Atualização diária
+
+O `vercel.json` agenda um cron diário (07:00 UTC) para `/api/revalidate`. A rota invalida o cache de todas as fontes e das páginas, e a visita seguinte volta a recolher tudo. Isto soma-se ao ISR de 3 em 3 horas. A rota exige `CRON_SECRET`.
 
 ## Atualizar os dados locais
 
-1. Substituir `data/su-local.xlsx` por um Excel com as mesmas colunas (no GitHub: *Add file → Upload files*).
-2. A Vercel volta a construir a página; o script `scripts/import-excel.mjs` converte o Excel em JSON automaticamente.
+1. Substituir `data/su-local.xlsx` por um Excel com as mesmas colunas.
+2. A Vercel volta a construir a página; o script `scripts/import-excel.mjs` converte o Excel em JSON.
 
 ## Desenvolvimento
 
 ```bash
 npm install
 npm run dev
-node scripts/selfcheck-uls.mjs   # verificação da lógica por ULS e da validação das flags de IA
+npx tsc --noEmit
+node scripts/selfcheck-uls.mjs   # verificação da lógica por ULS, DGS, faixa mensal, ar/pólen/UV e flags de IA
+npm run build
 ```
 
-Dependências sem vulnerabilidades conhecidas (`npm audit`: 0). O `postcss` usado pelo Next.js é forçado para a versão corrigida via `overrides`.
+Dependências sem vulnerabilidades conhecidas. O `postcss` usado pelo Next.js é forçado para a versão corrigida via `overrides`.
 
-O sistema de design (Swiss minimal, Atkinson Hyperlegible, tokens com modo escuro e contraste AA) foi gerado com a skill `ui-ux-pro-max`.
+Sistema de design: Atkinson Hyperlegible, tokens com modo escuro e contraste AA.

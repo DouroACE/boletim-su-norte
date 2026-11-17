@@ -40,9 +40,10 @@ export function SeasonChart({ data, unit, digits = 0, title }: { data: SeasonRow
   );
 }
 
-export function MeteoChart({ data, today }: { data: { date: string; tMin: number; tMax: number; precip: number }[]; today: string }) {
+export type MeteoRow = { date: string; tMin: number; tMax: number; precip: number; gMin?: number | null; gMax?: number | null };
+export function MeteoChart({ data, today }: { data: MeteoRow[]; today: string }) {
   return (
-    <div className="chart sm" role="img" aria-label="Temperatura mínima e máxima no Porto, últimos 45 dias e próximos 7">
+    <div className="chart" role="img" aria-label="Temperatura mínima e máxima no Porto (linhas contínuas) e em Gondomar (tracejado), com precipitação no Porto. Últimos 45 dias e próximos 7.">
       <ResponsiveContainer>
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
           {grid}
@@ -50,11 +51,37 @@ export function MeteoChart({ data, today }: { data: { date: string; tMin: number
           <YAxis yAxisId="t" {...axis} width={40} unit="°" />
           <YAxis yAxisId="p" orientation="right" {...axis} width={36} hide />
           <Tooltip {...tip} labelFormatter={(l) => shortDate(String(l))} formatter={(v, n) => (n === "Precipitação" ? `${nf(1)(v)} mm` : `${nf(1)(v)} °C`)} />
-          <Bar yAxisId="p" dataKey="precip" name="Precipitação" fill="var(--accent-soft)" isAnimationActive={false} />
-          <Line yAxisId="t" dataKey="tMax" name="Máxima" stroke="var(--c3)" strokeWidth={2} dot={false} isAnimationActive={false} />
-          <Line yAxisId="t" dataKey="tMin" name="Mínima" stroke="var(--c4)" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Legend wrapperStyle={{ fontSize: 13 }} formatter={legendFmt} />
+          <Bar yAxisId="p" dataKey="precip" name="Precipitação (Porto)" fill="var(--accent-soft)" isAnimationActive={false} />
+          <Line yAxisId="t" dataKey="tMax" name="Máxima Porto" stroke="var(--c3)" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line yAxisId="t" dataKey="tMin" name="Mínima Porto" stroke="var(--c4)" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line yAxisId="t" dataKey="gMax" name="Máxima Gondomar" stroke="var(--c3)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls={false} />
+          <Line yAxisId="t" dataKey="gMin" name="Mínima Gondomar" stroke="var(--c4)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} isAnimationActive={false} connectNulls={false} />
           <ReferenceLine yAxisId="t" x={today} stroke="var(--ink-3)" strokeDasharray="3 3" label={{ value: "hoje", fill: "var(--ink-3)", fontSize: 11, position: "insideTopRight" }} />
         </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Barras mensais (valores em falta não se desenham). refs = linhas de referência horizontais. */
+export function MonthlyBars({ data, title, unit, digits = 0, refs = [] }: { data: { mes: string; valor: number }[]; title: string; unit: string; digits?: number; refs?: { y: number; label: string }[] }) {
+  const rows = data.map((d) => ({ mes: d.mes, valor: Number.isFinite(d.valor) ? d.valor : null }));
+  const mesLongo = (m: string) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
+  const mesCurto = (m: string) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString("pt-PT", { month: "short", year: "2-digit", timeZone: "Europe/Lisbon" });
+  return (
+    <div className="chart" role="img" aria-label={title}>
+      <ResponsiveContainer>
+        <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          {grid}
+          <XAxis dataKey="mes" {...axis} tickFormatter={mesCurto} minTickGap={16} />
+          <YAxis {...axis} width={52} tickFormatter={nf(digits)} />
+          <Tooltip {...tip} labelFormatter={(l) => mesLongo(String(l))} formatter={(v) => `${nf(digits)(v)} ${unit}`} />
+          <Bar dataKey="valor" name={unit} fill="var(--c1)" isAnimationActive={false} />
+          {refs.map((r) => (
+            <ReferenceLine key={r.y} y={r.y} stroke="var(--c3)" strokeDasharray="4 4" label={{ value: r.label, fill: "var(--ink-3)", fontSize: 11, position: "insideTopLeft" }} />
+          ))}
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

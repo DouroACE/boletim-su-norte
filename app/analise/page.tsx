@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Analise } from "@/components/analise";
 
-export const metadata: Metadata = { title: "Análise de dados · Boletim de Vigilância Sazonal" };
+export const metadata: Metadata = { title: "Vigilância da equipa · Boletim de Vigilância Sazonal" };
 
 export default function AnalisePage() {
   return (
@@ -10,9 +10,9 @@ export default function AnalisePage() {
       <header className="masthead">
         <div className="wrap">
           <div>
-            <div className="eyebrow">Saúde Pública · Região Norte</div>
-            <h1>Análise de dados</h1>
-            <p className="sub">Carregue ficheiros Excel ou CSV e explore séries, categorias e correlações. Os dados são processados no seu browser.</p>
+            <div className="eyebrow">Saúde Pública · ULS Santo António</div>
+            <h1>Vigilância da equipa</h1>
+            <p className="sub">Carregue os ficheiros da equipa (Vigilância Sazonal, Afluência ao SU) ou qualquer Excel/CSV. Os dados são processados no seu browser.</p>
           </div>
         </div>
       </header>
@@ -21,7 +21,8 @@ export default function AnalisePage() {
         <div className="wrap">
           <ul>
             <li><a href="/">← Boletim</a></li>
-            <li><a href="/painel">Painel de risco</a></li>
+            <li><a href="/painel">Painel</a></li>
+            <li><a href="/alertas">Alertas</a></li>
           </ul>
         </div>
       </nav>

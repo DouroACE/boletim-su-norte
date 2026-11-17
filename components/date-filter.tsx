@@ -19,7 +19,7 @@ export function DateFilter({ range, today, path }: { range: Range | null; today:
       <div className="filter-head">
         <h2 id="h-filtro">Período</h2>
         <p>
-          {range ? <>A mostrar <b>{d(range.from)} – {d(range.to)}</b>. Flags comparadas com o mesmo período nos 5 anos anteriores.</> : <>A mostrar o <b>estado atual</b> (últimos 7 dias).</>}
+          {range ? <>A mostrar <b>{d(range.from)} – {d(range.to)}</b>. Flags comparadas com o mesmo período nos 5 anos anteriores.</> : <>A mostrar o <b>estado atual</b>.</>}
         </p>
       </div>
       <form method="get" action={path} className="filter-form">

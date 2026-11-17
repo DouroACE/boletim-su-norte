@@ -5,6 +5,7 @@
 export const REVALIDATE = 60 * 60 * 3; // 3 horas
 import { ULS_NORTE, decumulate, groupByUls, compareHomologous, type UlsMetric, type MonthVal } from "./uls";
 import { parseEvm } from "./evm";
+import { dailyMax, AIR_VARS, type AirVar, type AirDay } from "./risk";
 
 // Etiqueta comum a todas as recolhas: o cron diário (/api/revalidate) invalida-a e força dados frescos.
 export const DATA_TAG = "dados-publicos";
@@ -222,15 +223,18 @@ export async function fetchIpmaAvisos(): Promise<Aviso[]> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Open-Meteo — temperatura observada (últimos 30 dias) no Porto       */
+/* Open-Meteo — temperatura e UV (observado 45 dias + previsão 7 dias)  */
 /* ------------------------------------------------------------------ */
 
-export type Meteo = { date: string; tMed: number; tMin: number; tMax: number; precip: number };
-export async function fetchMeteoPorto(): Promise<Meteo[]> {
+export const PORTO = { lat: 41.1496, lon: -8.6109 };
+export const GONDOMAR = { lat: 41.1394, lon: -8.5328 };
+
+export type Meteo = { date: string; tMed: number; tMin: number; tMax: number; precip: number; uvMax: number };
+export async function fetchMeteo(lat: number, lon: number): Promise<Meteo[]> {
   const q = new URLSearchParams({
-    latitude: "41.1496",
-    longitude: "-8.6109",
-    daily: "temperature_2m_mean,temperature_2m_min,temperature_2m_max,precipitation_sum",
+    latitude: String(lat),
+    longitude: String(lon),
+    daily: "temperature_2m_mean,temperature_2m_min,temperature_2m_max,precipitation_sum,uv_index_max",
     past_days: "45",
     forecast_days: "7",
     timezone: "Europe/Lisbon",
@@ -243,7 +247,26 @@ export async function fetchMeteoPorto(): Promise<Meteo[]> {
     tMin: Number(d.temperature_2m_min[i]),
     tMax: Number(d.temperature_2m_max[i]),
     precip: Number(d.precipitation_sum[i]),
+    uvMax: Number(d.uv_index_max[i]),
   }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Open-Meteo — qualidade do ar e pólen (CAMS), máximo diário          */
+/* ------------------------------------------------------------------ */
+
+/** Últimos 7 dias e próximos 3, por local. Devolve o máximo diário de cada variável, por data (AAAA-MM-DD). */
+export async function fetchQualidadeAr(lat: number, lon: number): Promise<Record<string, AirDay>> {
+  const q = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    hourly: AIR_VARS.join(","),
+    past_days: "7",
+    forecast_days: "3",
+    timezone: "Europe/Lisbon",
+  });
+  const j = await getJSON<{ hourly: { time: string[] } & Partial<Record<AirVar, (number | null)[]>> }>(`https://air-quality-api.open-meteo.com/v1/air-quality?${q}`, 60 * 60);
+  return dailyMax(j.hourly.time, j.hourly);
 }
 
 /* Helper: corre uma recolha e devolve o estado da fonte, sem rebentar a página */
@@ -269,10 +292,11 @@ export const FONTES = {
   manchester: { nome: "SNS Transparência — Atendimentos por triagem de Manchester", url: `${SNS_DS}atendimentos-em-urgencia-triagem-manchester/` },
   ipmaAvisos: { nome: "IPMA — Avisos meteorológicos", url: "https://www.ipma.pt/pt/otempo/prev-sam/" },
   ipmaPrev: { nome: "IPMA — Previsão diária (API aberta)", url: "https://api.ipma.pt/" },
-  meteo: { nome: "Open-Meteo — Temperatura observada e prevista", url: "https://open-meteo.com/" },
+  meteo: { nome: "Open-Meteo — Temperatura e índice UV, observados e previstos", url: "https://open-meteo.com/" },
+  ar: { nome: "Open-Meteo — Qualidade do ar e pólen (CAMS)", url: "https://open-meteo.com/en/docs/air-quality-api" },
   osm: { nome: "Mapa © OpenStreetMap", url: "https://www.openstreetmap.org/copyright" },
   tempos: { nome: "SPMS — Portal TEMPOS (coordenadas das ULS)", url: "https://tempos.min-saude.pt/" },
-  evm: { nome: "DGS — eVM, Vigilância da Mortalidade (óbitos diários, Região Norte)", url: "https://evm.min-saude.pt/" },
+  evm: { nome: "DGS — eVM, Vigilância da Mortalidade (óbitos diários, Região Norte; sem série por ACeS)", url: "https://evm.min-saude.pt/" },
   ocupacao: { nome: "SNS Transparência — Taxa de ocupação hospitalar (ULS Santo António)", url: `${SNS_DS}ocupacao-do-internamento/` },
   csp: { nome: "SNS Transparência — Consultas médicas nos CSP (ULS Santo António)", url: `${SNS_DS}evolucao-das-consultas-medicas-nos-csp/` },
   dgs: { nome: "DGS / DE-SNS — Plano Nacional de Preparação e Resposta Sazonal em Saúde 2026–2027 (tabela p. 20)" },

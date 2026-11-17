@@ -4,9 +4,9 @@ import { VARIAVEIS } from "@/lib/export";
 import { addDays } from "@/lib/stats";
 import { FONTES } from "@/lib/sources";
 
-export const metadata: Metadata = { title: "Exportar para Excel · Boletim de Vigilância Sazonal" };
+export const metadata: Metadata = { title: "Exportar para Excel · ULS Santo António · Boletim" };
 
-const PADRAO = new Set(["episodios", "resp", "internamento", "obitos"]);
+const PADRAO = new Set(["ulssaUrg", "ulssaOcup", "ulssaCspPres", "obitosNorte", "tMed", "tMedGon"]);
 
 export default async function ExportarPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -24,19 +24,22 @@ export default async function ExportarPage({ searchParams }: { searchParams: Pro
       <header className="masthead">
         <div className="wrap">
           <div>
-            <div className="eyebrow">Saúde Pública · Região Norte</div>
+            <div className="eyebrow">Saúde Pública · ULS Santo António</div>
             <h1>Exportar para Excel</h1>
-            <p className="sub">Escolha as variáveis e o período. O ficheiro .xlsx tem uma folha diária, uma folha mensal por ULS (se escolher variáveis por ULS) e uma folha com as fontes.</p>
+            <p className="sub">Escolha as variáveis e o período. O ficheiro .xlsx tem uma folha diária, uma folha mensal da ULSSA (se escolher variáveis mensais) e uma folha com as fontes.</p>
           </div>
         </div>
       </header>
 
-      <nav className="toc" aria-label="Navegação">
+      <nav className="toc" aria-label="Secções do site">
         <div className="wrap">
           <ul>
-            <li><a href={`/${q}`}>← Boletim</a></li>
+            <li><a href={`/${q}`}>Boletim</a></li>
             <li><a href={`/painel${q}`}>Painel de risco</a></li>
+            <li><a href="/analise">Vigilância da equipa →</a></li>
+            <li><a href="/alertas">Alertas →</a></li>
             <li><a href={`/flags-ia${q}`}>Flags de IA</a></li>
+            <li><a href={`/exportar${q}`} aria-current="page">Exportar</a></li>
           </ul>
         </div>
       </nav>

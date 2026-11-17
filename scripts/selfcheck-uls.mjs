@@ -143,3 +143,31 @@ console.log("selfcheck-analise: ok");
   assert.equal(t.columns[0].name, "Data");
   console.log("selfcheck-data-esparsa: ok");
 }
+
+{
+  // Foco ULSSA: níveis DGS, faixa mensal, ocupação e rótulos de ar/pólen/UV (lib/risk.ts)
+  const R = await import("../lib/risk.ts");
+  assert.deepEqual([0, 1, 2, 3, null].map((l) => R.dgsToLevel(l)), ["normal", "atencao", "alerta", "alerta", "sem-dados"]);
+  assert.equal(R.worstOf(["normal", "alerta", "sem-dados"]), "alerta");
+  assert.equal(R.worstOf(["sem-dados"]), "sem-dados");
+  assert.equal(R.worstOf([]), "sem-dados");
+  const f = R.faixaMensal([{ mes: "2025-10", valor: 100 }, { mes: "2026-10", valor: 130 }, { mes: "2026-09", valor: NaN }, { mes: "2025-09", valor: 50 }], [{ mes: "2026-10", valor: 90 }, { mes: "2026-08", valor: 99 }], 12);
+  assert.deepEqual(f.map((x) => [x.mes, x.procura, x.ocupacao, x.nivel]), [
+    ["2025-09", null, null, null], ["2025-10", null, null, null], ["2026-08", null, 2, 2], ["2026-09", null, null, null], ["2026-10", 2, 1, 2],
+  ]);
+  assert.equal(R.faixaMensal([{ mes: "2026-10", valor: 1 }, { mes: "2026-11", valor: 2 }], [], 1).length, 1);
+  assert.deepEqual(R.ateMes([{ mes: "2026-01", v: 1 }, { mes: "2026-03", v: 2 }], "2026-02").map((x) => x.mes), ["2026-01"]);
+  const ui = R.dgsIndicators([], { procura: 30, procuraNota: "p", ocupacao: 96, ocupacaoNota: "o" });
+  assert.equal(ui.find((i) => i.id === "procura").value, 30);
+  assert.equal(ui.find((i) => i.id === "ocupacao").value, 96);
+  assert.equal(R.regionalDgsLevel(ui).level, 2);
+  assert.deepEqual(R.dailyMax(["2026-11-16T00:00", "2026-11-16T01:00", "2026-11-17T00:00"], { pm10: [10, 30, null], ozone: [null, null, 70] }), {
+    "2026-11-16": { pm10: 30 }, "2026-11-17": { ozone: 70 },
+  });
+  assert.equal(R.airLabel("pm10", 15), "Boa"); assert.equal(R.airLabel("pm10", 45), "Moderada");
+  assert.equal(R.airLabel("pm2_5", 30), "Fraca"); assert.equal(R.airLabel("ozone", undefined), "Sem dados");
+  assert.deepEqual(R.polenDia({ grass_pollen: 5, birch_pollen: 30 }), { label: "Moderada", tipo: "bétula" });
+  assert.deepEqual(R.polenDia({}), { label: "Sem dados", tipo: null });
+  assert.deepEqual([R.uvLabel(2), R.uvLabel(7), R.uvLabel(11), R.uvLabel(null)], ["Baixo", "Elevado", "Extremo", "Sem dados"]);
+  console.log("selfcheck-foco-ulssa: ok");
+}
