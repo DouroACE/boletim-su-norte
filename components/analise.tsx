@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { axis, grid, tip, nf, shortDate } from "@/components/charts";
 import { parseCSV, toTable, retype, aggregateByDate, correlate, summarize, type Table, type ColType, type Period, type AggFn, type Pt, type Column } from "@/lib/analise";
-import { detectarModelo, type PredefCorr } from "@/lib/modelos";
-import { PainelModelo, QualidadeDados } from "@/components/analise-modelos";
+import { agregarMensal, detectarModelo, tabelaComCensura, type PredefCorr } from "@/lib/modelos";
+import { PainelMensal, PainelModelo, QualidadeDados } from "@/components/analise-modelos";
 
 type Tab = { nome: string; table: Table };
 type StoredCol = { name: string; type: ColType; values: (string | number | null)[] };
@@ -224,11 +224,11 @@ export function Analise() {
       const ext = f.name.split(".").pop()?.toLowerCase();
       try {
         if (ext === "csv") {
-          novos.push({ nome: f.name, table: toTable(parseCSV(await f.text())) });
+          novos.push({ nome: f.name, table: tabelaComCensura(parseCSV(await f.text()), toTable) });
         } else if (ext === "xlsx") {
           const { default: lerXlsx } = await import("read-excel-file/browser");
           for (const folha of await lerXlsx(f)) {
-            novos.push({ nome: `${f.name} · ${folha.sheet}`, table: toTable(folha.data as unknown as (string | number | Date | null)[][]) });
+            novos.push({ nome: `${f.name} · ${folha.sheet}`, table: tabelaComCensura(folha.data as unknown as (string | number | Date | null)[][], toTable) });
           }
         } else {
           erros.push(`${f.name}: formato não suportado (use .xlsx ou .csv; o .xls antigo não é suportado).`);
@@ -301,6 +301,8 @@ export function Analise() {
     document.getElementById("h-corr")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   const modelos = tabs.map((t) => detectarModelo(t.table));
+  const mensal = useMemo(() => agregarMensal(tabs.map((t) => t.table)), [tabs]);
+  const temMensal = !!(mensal.su || mensal.intern || mensal.sud || mensal.csp || mensal.icpc);
 
   async function analisarIa() {
     if (!corr) return;
@@ -342,6 +344,12 @@ export function Analise() {
 
   return (
     <div className="analise">
+      <section aria-labelledby="h-modelo" className="card">
+        <h2 id="h-modelo">Ficheiro mensal da ULSSA</h2>
+        <p><a className="btn" href="/api/modelo-mensal" download>Descarregar modelo (.xlsx)</a></p>
+        <p className="hint">Preencha um ficheiro por mês (ULSSA_saude_sazonal_AAAA-MM.xlsx) e arraste-o para aqui. Junte vários meses no mesmo projeto para comparar com o ano anterior.</p>
+      </section>
+
       <section aria-labelledby="h-ficheiros" className="card">
         <h2 id="h-ficheiros">Ficheiros</h2>
         <div
@@ -396,6 +404,13 @@ export function Analise() {
           <p className="hint">Ainda não há projetos guardados.</p>
         )}
       </section>
+
+      {temMensal && (
+        <section aria-labelledby="h-mensal-ulssa" className="card">
+          <h2 id="h-mensal-ulssa">Painel mensal ULSSA</h2>
+          <PainelMensal m={mensal} />
+        </section>
+      )}
 
       {tabs.map((t, ti) => (
         <section key={ti} aria-labelledby={`h-tab-${ti}`} className="card">

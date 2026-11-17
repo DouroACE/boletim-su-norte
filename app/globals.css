@@ -317,7 +317,8 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 
 /* Análise de dados (processamento no browser) */
 .analise { display: grid; gap: 20px; }
-.analise > section { display: grid; gap: 12px; align-content: start; }
+.analise > section { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.analise > section > * { min-width: 0; }
 .analise h2 { font-size: 20px; }
 .analise h3.sub-h { font-size: 16px; margin-top: 8px; }
 .analise h4 { font-size: 14px; color: var(--ink-2); margin-bottom: 4px; }
@@ -330,8 +331,8 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .opts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .opts .field { flex: 1 1 170px; }
-.field { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
-.field input, .field select, .col-table select { min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; color-scheme: light dark; }
+.field { display: grid; min-width: 0; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.field input, .field select, .col-table select { min-width: 0; max-width: 100%; min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; color-scheme: light dark; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .proj-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .proj-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
