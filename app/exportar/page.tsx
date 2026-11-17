@@ -38,6 +38,7 @@ export default async function ExportarPage({ searchParams }: { searchParams: Pro
             <li><a href={`/painel${q}`}>Painel de risco</a></li>
             <li><a href="/analise">Vigilância da equipa →</a></li>
             <li><a href="/alertas">Alertas →</a></li>
+            <li><a href="/relatorios">Relatórios →</a></li>
             <li><a href={`/flags-ia${q}`}>Flags de IA</a></li>
             <li><a href={`/exportar${q}`} aria-current="page">Exportar</a></li>
           </ul>

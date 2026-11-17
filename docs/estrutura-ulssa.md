@@ -45,7 +45,7 @@ Sem limiar numérico (sinais de contexto): avisos IPMA, ÍCARO, FRIESA, qualidad
 | **Painel de risco** `/painel` | Equipa Local | Nível 0–3 com a tabela acima, faixa dos últimos 30 dias, medidas por nível | A reorientar |
 | **Vigilância da equipa** `/analise` | Equipa de saúde sazonal | Ficheiros da equipa carregados no browser ("Vigilância Sazonal 2026", "Afluência ao SU"): reconhecidos automaticamente, com painel e correlações pré-definidas (temperatura → óbitos, temperatura → urgências respiratórias) | Base feita |
 | **Alertas** `/alertas` | USP | Gerador de mensagens a partir de ÍCARO, avisos IPMA amarelo/laranja/vermelho e perigo máximo de incêndio: texto de e-mail, legenda para redes sociais, recomendações por público | A fazer |
-| **Relatórios** `/relatorios` | Equipa Local | Registo semanal para a DE-SNS (11 campos, à segunda-feira), histórico dos níveis de risco para os relatórios intercalar (31/10) e final (31/05) | A fazer |
+| **Relatórios** `/relatorios` | Equipa Local | Registo semanal para a DE-SNS (11 campos, de segunda a domingo) com sugestão de USP a partir de ÍCARO, FRIESA e avisos IPMA (quando a semana contém hoje); texto de e-mail e tabela para copiar; histórico com contagem por nível para os períodos intercalar (31/10) e época completa (31/05); cópia em .json. Só no browser | Feito |
 | Flags de IA, Exportar | Equipa | Indicadores da ULSSA | A reorientar |
 
 Sai do foco: mapa e matriz das 14 ULS do Norte; indicadores da ARS Norte deixam de ser os principais (só contexto, identificados como regionais).
