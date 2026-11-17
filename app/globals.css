@@ -1,16 +1,16 @@
-/* Sistema de design — alinhado com o SNS 24 (verde #007D5A, Roboto, cantos de 8 px), contraste WCAG AA em texto e componentes */
+/* Sistema de design — identidade da Saúde Sazonal da ULSSA (azul #1F4697 e amarelo #FCBF43 dos planos e relatórios), Roboto, cantos de 8 px, contraste WCAG AA em texto e componentes */
 :root {
-  --bg: #f9f9f9;
+  --bg: #f7f9fc;
   --surface: #ffffff;
-  --surface-2: #f2f9f7;
+  --surface-2: #f1f5fb;
   --ink: #0d0d0d;
   --ink-2: #4b4b4b;
   --ink-3: #6b6b6b; /* #767676 fica abaixo de 4,5:1 sobre o fundo verde-claro */
-  --line: #d5ddd9; /* borda dos cartões: decorativa, o cartão também se distingue pelo texto */
-  --accent: #007d5a;
-  --accent-hover: #006d4c; /* ligações ao passar o rato e texto sobre --accent-soft */
+  --line: #d3dbe8; /* borda dos cartões: decorativa, o cartão também se distingue pelo texto */
+  --accent: #1f4697;
+  --accent-hover: #163a80; /* ligações ao passar o rato e texto sobre --accent-soft */
   --accent-ink: #ffffff;
-  --accent-soft: #e0f3ee;
+  --accent-soft: #dae3f3;
 
   --ok: #1d7a46;
   --ok-soft: #e4f4ea;
@@ -21,11 +21,12 @@
   --none: #5b6370; /* #6b7380 ficava em 4,1:1 sobre --none-soft */
   --none-soft: #eceef1;
 
-  --c1: #007d5a; /* época atual */
+  --c1: #1f4697; /* época atual */
   --c2: #8a94a6; /* época anterior */
   --c3: #c2410c; /* respiratórias / quente */
-  --c4: #1f6fb2; /* frio / temperatura */
-  --band: rgba(0, 125, 90, 0.14);
+  --c4: #0e7c86; /* frio / temperatura */
+  --band: rgba(31, 70, 151, 0.14);
+  --tiras: linear-gradient(90deg, #e2f0d9 0 25%, #fff2cc 25% 50%, #fbe5d6 50% 75%, #deebf7 75%); /* faixa das capas dos planos */
 
   --radius: 8px;
   --shadow: 0 1px 2px rgba(11, 18, 32, 0.06), 0 1px 1px rgba(11, 18, 32, 0.04);
@@ -43,10 +44,10 @@
     --ink-2: #c3cbd8;
     --ink-3: #98a3b4;
     --line: #273142;
-    --accent: #4fc59a;
-    --accent-hover: #7fd9b5;
-    --accent-ink: #06130d;
-    --accent-soft: #0f2b22;
+    --accent: #8fb1ec;
+    --accent-hover: #b5ccf3;
+    --accent-ink: #0b1426;
+    --accent-soft: #16233d;
     --ok: #4cc283;
     --ok-soft: #12291d;
     --warn: #f0b04a;
@@ -55,11 +56,12 @@
     --bad-soft: #341614;
     --none: #98a3b4;
     --none-soft: #1d2430;
-    --c1: #4fc59a;
+    --c1: #8fb1ec;
     --c2: #6b7689;
     --c3: #fb8a4d;
-    --c4: #8cc4f0;
-    --band: rgba(79, 197, 154, 0.16);
+    --c4: #4fc3cc;
+    --band: rgba(143, 177, 236, 0.16);
+    --tiras: linear-gradient(90deg, #2c3a2a 0 25%, #3d3520 25% 50%, #3d2c24 50% 75%, #22314a 75%);
     --shadow: none;
     color-scheme: dark;
   }
@@ -90,10 +92,13 @@ p { margin: 0; }
 .skip:focus { left: 8px; top: 8px; }
 
 /* Cabeçalho */
-.masthead { background: var(--surface); border-bottom: 1px solid var(--line); }
+.masthead { background: var(--tiras) top / 100% 8px no-repeat, var(--surface); padding-top: 8px; border-bottom: 1px solid var(--line); }
+/* Sol e nuvem da Saúde Sazonal, como nas capas dos planos da ULSSA */
+.masthead .wrap > div:first-child { padding-left: 104px; min-height: 88px; background: url(/sazonal.png) left center / 88px auto no-repeat; }
+@media (max-width: 640px) { .masthead .wrap > div:first-child { padding-left: 0; padding-top: 64px; background-position: left top; background-size: 56px auto; } }
 .masthead .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; padding-top: 28px; padding-bottom: 22px; }
 .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-.masthead h1 { font-size: clamp(30px, 5vw, 40px); font-weight: 300; margin-top: 6px; }
+.masthead h1 { font-size: clamp(30px, 5vw, 40px); font-weight: 400; margin-top: 6px; color: var(--accent); }
 .masthead .sub { color: var(--ink-2); margin-top: 6px; max-width: 62ch; }
 .meta { display: grid; gap: 4px; font-size: 14px; color: var(--ink-3); text-align: left; }
 @media (min-width: 900px) { .meta { text-align: right; } }
@@ -372,10 +377,10 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 @page { size: A4 portrait; margin: 12mm; }
 @media print {
   :root {
-    --bg: #ffffff; --surface: #ffffff; --surface-2: #f3f5f4;
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f1f5fb;
     --ink: #000000; --ink-2: #1a1a1a; --ink-3: #333333; --line: #bbbbbb;
-    --accent: #005a40; --accent-hover: #005a40; --accent-soft: #e6f2ee; --accent-ink: #ffffff;
-    --c1: #007d5a; --c2: #6b7280; --c3: #c2410c; --c4: #1f6fb2; --band: rgba(0, 125, 90, 0.14);
+    --accent: #1f4697; --accent-hover: #1f4697; --accent-soft: #dae3f3; --accent-ink: #ffffff;
+    --c1: #1f4697; --c2: #6b7280; --c3: #c2410c; --c4: #0e7c86; --band: rgba(31, 70, 151, 0.14);
     --shadow: none; color-scheme: light;
   }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Boletim vivo de vigilância sazonal da ULS Santo António (Gondomar e Porto Ocidental): urgências, ocupação hospitalar, consultas, temperatura, qualidade do ar e avisos do IPMA, com recolha automática de dados públicos.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#007D5A" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#1F4697" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
