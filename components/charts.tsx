@@ -3,16 +3,16 @@ import {
   ResponsiveContainer, ComposedChart, LineChart, Line, Area, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from "recharts";
 
-const axis = { stroke: "var(--ink-3)", fontSize: 12, tickLine: false };
+export const axis = { stroke: "var(--ink-3)", fontSize: 12, tickLine: false };
 const legendFmt = (v: string) => <span style={{ color: "var(--ink-2)" }}>{v}</span>;
-const grid = <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />;
-const tip = {
+export const grid = <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" vertical={false} />;
+export const tip = {
   contentStyle: { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, color: "var(--ink)" },
   labelStyle: { color: "var(--ink)", fontWeight: 700 },
 };
-const nf = (d = 0) => (v: unknown) =>
+export const nf = (d = 0) => (v: unknown) =>
   typeof v === "number" && Number.isFinite(v) ? v.toLocaleString("pt-PT", { maximumFractionDigits: d }) : "—";
-const shortDate = (iso: string) => {
+export const shortDate = (iso: string) => {
   const d = new Date(iso + "T12:00:00Z");
   return d.toLocaleDateString("pt-PT", { day: "numeric", month: "short" });
 };

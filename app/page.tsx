@@ -126,6 +126,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <li><a href="#local">Dados locais do SU</a></li>
             <li><a href="#metodologia">Metodologia e fontes</a></li>
             <li><a href={`/painel${rangeQuery(range)}`}>Painel de risco →</a></li>
+            <li><a href="/analise">Análise de dados →</a></li>
             <li><a href={`/flags-ia${rangeQuery(range)}`}>Flags de IA →</a></li>
           </ul>
         </div>

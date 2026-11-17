@@ -63,6 +63,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
             <li><a href="#indicadores-dgs">Indicadores DGS</a></li>
             <li><a href="#matriz">Matriz por ULS</a></li>
             <li><a href={`/flags-ia${q}`}>Flags de IA →</a></li>
+            <li><a href="/analise">Análise de dados →</a></li>
           </ul>
         </div>
       </nav>

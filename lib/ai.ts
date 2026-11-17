@@ -168,3 +168,27 @@ export async function aiFlags(indicators: Indicator[], avisos: Aviso[], periodo 
   }
   return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras" };
 }
+
+/* ------------------------------------------------------------------ */
+/* Análise de dados carregados — só recebe o resumo agregado           */
+/* ------------------------------------------------------------------ */
+
+const ANALISE_SYSTEM = `És um estatístico a apoiar a análise de dados de uma Unidade de Saúde Pública do Norte de Portugal.
+Recebes APENAS um resumo agregado em JSON: nomes de colunas, tipos, contagens, mín/máx/média, séries semanais e resultados de correlação. Não recebes registos individuais.
+Escreves em português europeu, tom técnico e sóbrio. Descreves relações entre variáveis, sazonalidade, desfasamentos (lags) e anomalias, usando só os números fornecidos.
+Indicas sempre a incerteza: amostra pequena, correlação não implica causalidade, possíveis variáveis de confusão.
+Não inventes valores, causas nem recomendações clínicas. Responde com 5 a 8 linhas curtas, cada uma começada por "- ".`;
+
+/** Análise em texto de um resumo agregado (JSON). Devolve null sem chave ou em caso de falha do fornecedor. */
+export async function aiAnalise(summaryJson: string): Promise<{ text: string[]; model: string } | null> {
+  const prompt = `Resumo agregado dos dados carregados (JSON):\n${summaryJson}\n\nRedige a análise.`;
+  try {
+    const r = await runLLM(prompt, ANALISE_SYSTEM, 900);
+    if (!r) return null;
+    const text = toLines(r.text).slice(0, 8);
+    return text.length ? { text, model: r.model } : null;
+  } catch (e) {
+    console.error("[ai-analise] falhou:", (e as Error).message);
+    return null;
+  }
+}

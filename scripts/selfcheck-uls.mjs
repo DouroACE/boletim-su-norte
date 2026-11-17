@@ -73,3 +73,73 @@ const ev = parseEvm(html, "ARS Norte");
 assert.deepEqual(ev, [{ date: "2025-02-28", value: 100 }, { date: "2025-11-16", value: 104 }, { date: "2026-11-15", value: 110 }]);
 assert.deepEqual(parseEvm("<html>mudou</html>", "ARS Norte"), []);
 console.log("selfcheck-evm: ok");
+
+const { parseCSV, toTable, aggregateByDate, correlate, summarize, asNum } = await import("../lib/analise.ts");
+const addD = (iso, n) => new Date(Date.parse(iso + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+
+// CSV com ; (cabeçalho), aspas, "" escapadas, quebras de linha dentro de campos e BOM
+assert.deepEqual(parseCSV('﻿Nome;Obs;Valor\n"Ana; A";"texto ""x""";"1.234,5"\n"B";"linha\nnova";2\n'), [
+  ["Nome", "Obs", "Valor"], ["Ana; A", 'texto "x"', "1.234,5"], ["B", "linha\nnova", "2"],
+]);
+assert.equal(parseCSV("a,b,c\n1,2,3")[1][2], "3");
+assert.equal(parseCSV("a\tb\n1\t2")[1][0], "1");
+
+// Números PT e dd/mm/aaaa
+assert.equal(asNum("1.234,5"), 1234.5); assert.equal(asNum("1234,5"), 1234.5); assert.equal(asNum("1234.5"), 1234.5); assert.equal(asNum("abc"), null);
+const tb = toTable(parseCSV("Data;Total;Obs\n01/10/2025;\"1.234,5\";x\n02/10/2025;12;y\n03/10/2025;3,5;z\n04/10/2025;7;w\n05/10/2025;8;v"));
+assert.deepEqual(tb.columns.map((c) => c.type), ["date", "number", "category"]);
+assert.equal(tb.nRows, 5);
+assert.equal(tb.columns[0].values[0].toISOString().slice(0, 10), "2025-10-01");
+assert.equal(tb.columns[1].values[0], 1234.5);
+// Excel: número de série só em coluna "data"
+const serial = Date.UTC(2025, 9, 1) / 864e5 + 25569;
+const tsx = toTable([["Data", "Valor"], [serial, 1], [serial + 1, 2], [serial + 2, 3], [serial + 3, 4], [serial + 4, 5]]);
+assert.equal(tsx.columns[0].type, "date"); assert.equal(tsx.columns[0].values[0].toISOString().slice(0, 10), "2025-10-01");
+assert.equal(toTable([["Valor"], [serial], [serial + 1], [serial + 2], [serial + 3], [serial + 4]]).columns[0].type, "number");
+
+// Agregação semanal com início à segunda-feira (2025-10-05 é domingo, 2025-10-06 segunda)
+assert.deepEqual(aggregateByDate(["2025-10-05", "2025-10-06"], [1, 2], "semana", "soma"), [
+  { date: "2025-09-29", value: 1 }, { date: "2025-10-06", value: 2 },
+]);
+assert.deepEqual(aggregateByDate(["2025-10-01", "2025-10-03", "2025-10-03"], [1, 2, 3], "dia", "media"), [
+  { date: "2025-10-01", value: 1 }, { date: "2025-10-03", value: 2.5 },
+]);
+assert.deepEqual(aggregateByDate(["2025-10-01", "2025-11-03"], [5, 1], "mes", "contagem"), [
+  { date: "2025-10-01", value: 1 }, { date: "2025-11-01", value: 1 },
+]);
+
+// Correlação: série e cópia deslocada 3 dias para a frente → melhor lag 3, r ≈ 1
+const base = [];
+for (let i = 0; i < 40; i++) base.push({ date: addD("2025-10-01", i), value: Math.sin(i * 0.7) * 10 + (i % 5) * 3 + i * 0.2 });
+const shifted = base.map((p) => ({ date: addD(p.date, 3), value: p.value }));
+const cr = correlate(base, shifted, 14);
+assert.equal(cr.bestLag.lag, 3); assert.ok(Math.abs(cr.bestLag.r - 1) < 1e-9);
+assert.ok(Math.abs(correlate(base, base).pearson - 1) < 1e-9);
+assert.ok(Math.abs(correlate(base, base).spearman - 1) < 1e-9);
+assert.equal(cr.lags.length, 29);
+assert.ok(Number.isNaN(correlate(base.slice(0, 5), base.slice(0, 5)).pearson)); // n < 8
+
+// Resumo para a IA: sem valores de categoria, séries semanais ≤ 60 pontos
+const big = [["Data", "Doente", "Idade"]];
+for (let i = 0; i < 400; i++) big.push([addD("2024-01-01", i), "Nome Secreto " + i, 20 + (i % 60)]);
+const sum = summarize(toTable(big));
+assert.equal(sum.registos, 400);
+assert.ok(!JSON.stringify(sum).includes("Nome Secreto"));
+assert.ok(sum.semanal.every((s) => s.pontos.length <= 60));
+assert.equal(sum.colunas[1].distintos, 400);
+console.log("selfcheck-analise: ok");
+
+{
+  const { toTable: tt } = await import("../lib/analise.ts");
+  const t = tt([["Ano", "Dia", "Mês2", "Tmax"], [2026, 1, "Janeiro", 12], [2026, 2, "Setembto", 20], [2026, 31, "Junho", 25], [0.59, 3, "Março", 9]]);
+  const d = t.columns[0];
+  assert.equal(d.name, "Data"); assert.equal(d.type, "date");
+  assert.deepEqual(d.values.map((v) => (v ? v.toISOString().slice(0, 10) : null)), ["2026-01-01", "2026-09-02", null, null]);
+  console.log("selfcheck-data-repartida: ok");
+}
+{
+  const { toTable: tt } = await import("../lib/analise.ts");
+  const t = tt([["Ano", "Dia", "Mês", "Alerta Frieza"], [2023, 1, "Janeiro", new Date(Date.UTC(2023, 0, 11))], [2023, 2, "Janeiro", null], [2023, 3, "Janeiro", null]]);
+  assert.equal(t.columns[0].name, "Data");
+  console.log("selfcheck-data-esparsa: ok");
+}
