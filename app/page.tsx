@@ -122,6 +122,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <li><a href="#meteorologia">Meteorologia</a></li>
             <li><a href="#local">Dados locais do SU</a></li>
             <li><a href="#metodologia">Metodologia e fontes</a></li>
+            <li><a href={`/painel${rangeQuery(range)}`}>Painel de risco →</a></li>
             <li><a href={`/flags-ia${rangeQuery(range)}`}>Flags de IA →</a></li>
           </ul>
         </div>
@@ -256,7 +257,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
                             <td key={lbl} data-label={lbl}>
                               <span className="num">{fmt(m.valor)}</span>
                               {m.varPct != null && <small> {m.varPct >= 0 ? "▲" : "▼"} {fmt(Math.abs(m.varPct), 0)}%</small>}
-                              {" "}<Chip level={m.level} />
+                              {" "}<Chip level={m.level} label={m.suspeito ? "A rever" : undefined} />
                             </td>
                           ))}
                           <td data-label="Triagem V+L">{r.pctGrave != null ? `${fmt(r.pctGrave, 1)}%` : "—"}</td>

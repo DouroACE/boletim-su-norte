@@ -12,6 +12,12 @@ assert.equal(ulsOf("Unidade Local de Saúde do Nordeste, E.P.E. - UCSP Braga")?.
 const d = decumulate([{ mes: "2025-12", v: 120 }, { mes: "2026-02", v: 25 }, { mes: "2026-01", v: 10 }], ["v"]);
 assert.deepEqual(d.map((r) => r.v), [120, 10, 15]);
 
+// Tâmega e Sousa 2025: julho repetiu o acumulado de junho → julho e agosto ficam "a rever"
+const tam = decumulate([{ mes: "2025-06", v: 106 }, { mes: "2025-07", v: 106 }, { mes: "2025-08", v: 143 }, { mes: "2025-09", v: 160 }], ["v"]);
+assert.ok(Number.isNaN(tam[1].v) && Number.isNaN(tam[2].v)); assert.equal(tam[3].v, 17);
+const sus = compareHomologous([{ mes: "2025-08", valor: NaN }, { mes: "2026-08", valor: 17331 }], "pct");
+assert.equal(sus.suspeito, true); assert.equal(sus.level, "sem-dados"); assert.equal(sus.valor, 17331);
+
 const c = compareHomologous([{ mes: "2025-10", valor: 100 }, { mes: "2026-09", valor: 90 }, { mes: "2026-10", valor: 125 }], "poisson");
 assert.equal(c.z, 2.5); assert.equal(c.level, "atencao"); assert.equal(c.varPct, 25);
 assert.equal(compareHomologous([{ mes: "2026-10", valor: 5 }], "pct").level, "sem-dados");
@@ -49,3 +55,12 @@ for (const [a, b] of [["2025-11-01", "2025-11-30"], ["2025-10-01", "2025-12-31"]
 assert.equal(rangeFlag("x", "X", "", pts, "2030-01-01", "2030-01-31").level, "sem-dados");
 assert.equal(rangeFlag("x", "X", "", pts, "2021-01-01", "2021-01-31").level, "sem-dados"); // sem 3 anos anteriores
 console.log("selfcheck-range: ok");
+
+const { dgsLevel, regionalDgsLevel, dgsIndicators } = await import("../lib/risk.ts");
+assert.deepEqual([-8, 9.9, 10, 25, 49, 50].map((v) => dgsLevel(v, [10, 25, 50])), [0, 0, 1, 2, 2, 3]);
+assert.equal(dgsLevel(100, [100, 100, Infinity]), 2); // Medicina ≥ 100 % → nível 2
+const dind = dgsIndicators([{ id: "episodios", current: 127, baselineMean: 100 }]);
+const rl = regionalDgsLevel(dind);
+assert.equal(rl.level, 2); assert.equal(rl.withData, 1); assert.match(rl.reason, /\+27,0 % → nível 2/);
+assert.equal(regionalDgsLevel(dgsIndicators([])).level, null);
+console.log("selfcheck-risk: ok");

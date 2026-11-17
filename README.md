@@ -37,6 +37,14 @@ Secção `#mapa` da página principal: um mapa (Leaflet + OpenStreetMap) e uma t
 
 O modelo (Groq/Hugging Face, as mesmas chaves da síntese) recebe a tabela de indicadores regionais e por ULS e propõe até 8 flags. Cada flag tem de citar os ids dos indicadores em que se baseia. O código descarta as flags que citem indicadores inexistentes, e o nível de cada flag é sempre o pior nível estatístico dos indicadores citados, nunca o da IA. Sem chave configurada, a página mostra as flags das regras. A tabela exata enviada ao modelo fica visível no fim da página.
 
+## Painel de risco (`/painel`)
+
+- **Medidor do nível de risco DGS (0 Verde → 3 Vermelho)** da Região Norte, calculado com a tabela de critérios assistenciais do Plano Sazonal 2026–2027 (p. 20, `lib/risk.ts`). Mostra a justificação e quantos dos 7 indicadores têm dados. Hoje só a procura do SU tem fonte pública, por isso o nível é parcial.
+- **Donut das 14 ULS** pelo pior sinal estatístico (óbitos SICO ou urgências).
+- **Barras com os limiares dos níveis 1–3** para cada indicador da DGS, tracejadas quando falta a fonte (com quem a tem).
+- **Matriz por ULS** ordenada por gravidade, com o nível DGS aplicado à procura do SU de cada ULS.
+- **Meses repetidos pela SPMS** (o acumulado de um mês igual ao anterior) ficam "A rever" em vez de gerar falsas variações.
+
 ## Filtro de datas
 
 As duas páginas aceitam `?de=AAAA-MM-DD&ate=AAAA-MM-DD`, com atalhos para 7, 30 e 90 dias e para a época atual ou anterior. Sem filtro, mostram o estado atual (últimos 7 dias contra a linha de base sazonal). Com filtro, cada indicador compara a média do período com a média do **mesmo período nos 5 anos anteriores** (um único z por período, para não multiplicar falsos alertas em períodos longos). O mapa por ULS usa o último mês publicado até à data final, e as flags de IA analisam esse período. Os avisos do IPMA só aparecem quando o período inclui hoje, porque o IPMA não publica histórico.
