@@ -11,6 +11,7 @@ import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, Fonte, fmt, fmtDate } from "@/c
 import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, MonthlyBars, type SeasonRow, type MeteoRow } from "@/components/charts";
 import { DGS_TEXT, dgsLevel, dgsToLevel, worstOf, uvLabel, airLabel, polenDia, ateMes, LIMIAR_OCUPACAO, LIMIAR_PROCURA, type DgsLevel, type AirDay } from "@/lib/risk";
 import { compareHomologous } from "@/lib/uls";
+import { perigosAtivos, recomendacoes, TIPO_AVISO } from "@/lib/alertas";
 
 export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinha com dados novos
 
@@ -146,6 +147,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const arLinhas: { lugar: string; dia: string; d: AirDay | undefined }[] = [];
   for (const [lugar, ar] of [["Porto", arP.value], ["Gondomar", arG.value]] as const) for (const dia of dias) arLinhas.push({ lugar, dia, d: ar?.[dia] });
 
+  // Recomendações: pelos avisos do IPMA em vigor (Porto); sem avisos, pelo mês atual
+  const temAvisos = !!avisosPto?.length;
+  const perigosRecom = range && range.to < today ? [] : perigosAtivos(avisosPto ?? [], Number(today.slice(5, 7)));
+
   const statuses: SourceStatus[] = [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteoP, meteoG, arP, arG, uls, ulssa].map((s) => s.status);
   statuses.push({ id: "excel", name: `Dados locais do SU (${local.source})`, url: "#local", ok: !!L, lastDate: L?.last });
 
@@ -223,6 +228,43 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <Fonte ids={["friesa", obitos.value?.norte ? "evm" : "obitos", "ipmaAvisos"]} extra={summary.generated === "ia" ? `Texto redigido por ${summary.model} a partir destes números` : undefined} />
           </article>
         </section>
+
+        {/* CONTACTOS ÚTEIS */}
+        <section id="contactos" aria-label="Contactos úteis" className="contactos">
+          <a className="contacto" href="tel:808242424">
+            <strong>Linha SNS 24 — 808 24 24 24</strong>
+            <span>Aconselhamento clínico 24 horas por dia</span>
+          </a>
+          <a className="contacto" href="tel:112">
+            <strong>Emergência — 112</strong>
+            <span>Situações de emergência</span>
+          </a>
+        </section>
+
+        {/* RECOMENDAÇÕES À POPULAÇÃO */}
+        {perigosRecom.length > 0 && (
+          <section id="recomendacoes" aria-labelledby="h-recom">
+            <div className="section-head">
+              <h2 id="h-recom">Recomendações à população</h2>
+              <p>
+                {temAvisos
+                  ? "Pelos avisos do IPMA em vigor para o distrito do Porto e pela época do ano."
+                  : "Sem avisos do IPMA em vigor para o distrito do Porto: recomendação sazonal, pelo mês atual."}{" "}
+                Medidas do procedimento de alertas da equipa.
+              </p>
+            </div>
+            <div className="grid g-2">
+              {perigosRecom.map((p) => (
+                <article key={p} className="card recom" aria-labelledby={`recom-${p}`}>
+                  <h3 id={`recom-${p}`}>Recomendações · {TIPO_AVISO[p]}</h3>
+                  <ol className="recom-list">
+                    {recomendacoes(p).map((r, i) => <li key={i}>{r}</li>)}
+                  </ol>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ULS SANTO ANTÓNIO */}
         <section id="ulssa" aria-labelledby="h-ulssa">
