@@ -2,7 +2,7 @@
 // Funções puras; só imports de tipo (scripts/selfcheck-modelos.mjs carrega este ficheiro em Node).
 import type { Table, Column, Cell } from "./analise";
 
-export type Modelo = "vigilancia" | "afluencia_su" | "su_diario" | "su_diagnosticos" | "internamento" | "csp_mensal" | "csp_icpc2";
+export type Modelo = "vigilancia" | "afluencia_su" | "su_diario" | "su_diagnosticos" | "internamento" | "csp_mensal" | "csp_icpc2" | "virus_spcira";
 export type Nivel = 0 | 1 | 2 | 3;
 export type BaseRef = "ano anterior" | "28 dias anteriores";
 export type Periodo = "dia" | "semana" | "mes";
@@ -64,6 +64,8 @@ export function detectarModelo(t: Table): Modelo | null {
   if (tem(/^data$/) && tem(/^ocupacao enfermarias/)) return "internamento";
   if (tem(/^mes$/) && tem(/^consultas abertas$/)) return "csp_mensal";
   if (tem(/^mes$/) && tem(/^ira$/) && tem(/^k77$/)) return "csp_icpc2";
+  // Vírus respiratórios (SPCIRA): positivos e negativos por vírus; a semana pode vir só como nome de coluna (modelo descarregável).
+  if (VIRUS.every((v) => tem(v.pos) && tem(v.neg)) && (comData || tem(/^semana$/))) return "virus_spcira";
   return null;
 }
 
@@ -335,6 +337,7 @@ export const FOLHAS_MENSAIS: { folha: string; cabecalho: string[] }[] = [
   { folha: "Internamento", cabecalho: ["Data", "Ocupação enfermarias (%)", "Ocupação Medicina (%)", "Admissões UCI", "Doentes em boarding", "Óbitos hospitalares"] },
   { folha: "CSP_mensal", cabecalho: ["Mês", "ACeS", "Grupo etário", "Consultas abertas", "Consultas programadas", "Referenciações SNS 24", "Consultas SAC"] },
   { folha: "CSP_ICPC2", cabecalho: ["Mês", "ACeS", "IRA", "A04", "A08", "A88", "D70-D73", "K07", "K77", "S92", "T11"] },
+  { folha: "Virus_SPCIRA", cabecalho: ["Semana", "Influenza A positivos", "Influenza A negativos", "VSR positivos", "VSR negativos", "SARS-CoV-2 positivos", "SARS-CoV-2 negativos"] },
 ];
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -595,6 +598,59 @@ export function cspResumo(csp: Table): CspResumo {
   return { linhas, porAces: [...porAces].map(([aces, totais]) => ({ aces, totais })) };
 }
 
+/* ---------- Vírus respiratórios (SPCIRA) ---------- */
+
+export type VirusChave = "influenza" | "vsr" | "covid";
+/** Colunas de positivos e negativos de cada vírus (nomes já normalizados por `sem`). */
+export const VIRUS: { chave: VirusChave; rotulo: string; pos: RegExp; neg: RegExp }[] = [
+  { chave: "influenza", rotulo: "Influenza A", pos: /^influenza a positivos$/, neg: /^influenza a negativos$/ },
+  { chave: "vsr", rotulo: "VSR", pos: /^vsr positivos$/, neg: /^vsr negativos$/ },
+  { chave: "covid", rotulo: "SARS-CoV-2", pos: /^sars-cov-2 positivos$/, neg: /^sars-cov-2 negativos$/ },
+];
+export type ContagemVirus = { positivos: number | null; testes: number | null; pct: number | null };
+export type VirusSemana = { semana: string; porVirus: Record<VirusChave, ContagemVirus> };
+export type VirusResumo = { semanas: VirusSemana[]; totais: Record<VirusChave, ContagemVirus> };
+
+const numero = (v: Cell | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const somaNula = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+
+/** Positividade = positivos / (positivos + negativos) em %; null quando não há testes. */
+function contagemVirus(pos: number | null, neg: number | null): ContagemVirus {
+  const testes = pos == null && neg == null ? null : (pos ?? 0) + (neg ?? 0);
+  return { positivos: pos, testes, pct: pos != null && testes != null && testes > 0 ? (pos / testes) * 100 : null };
+}
+
+/** Por semana (segunda-feira) e para o período: positivos, testes e positividade de cada vírus. Linhas repetidas somam-se. */
+export function virusResumo(t: Table): VirusResumo {
+  const dCol = t.columns.find((c) => sem(c.name) === "semana") ?? colData(t);
+  const cols = VIRUS.map((v) => ({ v, pos: t.columns.find((c) => v.pos.test(sem(c.name))), neg: t.columns.find((c) => v.neg.test(sem(c.name))) }));
+  type Par = { pos: number | null; neg: number | null };
+  const acc = new Map<string, Record<VirusChave, Par>>();
+  const tot = {} as Record<VirusChave, Par>;
+  for (const v of VIRUS) tot[v.chave] = { pos: null, neg: null };
+  dCol?.values.forEach((dv, i) => {
+    if (!(dv instanceof Date)) return;
+    const k = isoOf(dv);
+    const e = acc.get(k) ?? ({} as Record<VirusChave, Par>);
+    for (const { v, pos, neg } of cols) {
+      const p = numero(pos?.values[i]), n = numero(neg?.values[i]);
+      const a = e[v.chave] ?? { pos: null, neg: null };
+      e[v.chave] = { pos: somaNula(a.pos, p), neg: somaNula(a.neg, n) };
+    }
+    acc.set(k, e);
+  });
+  for (const e of acc.values()) for (const v of VIRUS) {
+    const x = e[v.chave];
+    if (x) tot[v.chave] = { pos: somaNula(tot[v.chave].pos, x.pos), neg: somaNula(tot[v.chave].neg, x.neg) };
+  }
+  const porVirus = (e: Record<VirusChave, Par>) =>
+    Object.fromEntries(VIRUS.map((v) => [v.chave, contagemVirus(e[v.chave]?.pos ?? null, e[v.chave]?.neg ?? null)])) as Record<VirusChave, ContagemVirus>;
+  return {
+    semanas: [...acc].sort(([a], [b]) => a.localeCompare(b)).map(([semana, e]) => ({ semana, porVirus: porVirus(e) })),
+    totais: porVirus(tot),
+  };
+}
+
 /** Totais por código/coluna (ICD-10 ou ICPC-2) de uma tabela; "<5" não entra no total. */
 export function totaisPorCodigo(t: Table): { codigo: string; total: number; censurados: number }[] {
   return t.columns
@@ -608,7 +664,7 @@ export function totaisPorCodigo(t: Table): { codigo: string; total: number; cens
 
 /* ---------- Agregação mensal ---------- */
 
-export type MensalULSSA = { su: Table | null; intern: Table | null; sud: Table | null; csp: Table | null; icpc: Table | null };
+export type MensalULSSA = { su: Table | null; intern: Table | null; sud: Table | null; csp: Table | null; icpc: Table | null; virus: Table | null };
 
 /** Junta, por modelo, todas as tabelas carregadas (ordem = ordem de carregamento; a mais tardia ganha). */
 export function agregarMensal(tabelas: Table[]): MensalULSSA {
@@ -627,5 +683,6 @@ export function agregarMensal(tabelas: Table[]): MensalULSSA {
     sud: juntar(de("su_diagnosticos"), porData),
     csp: juntar(de("csp_mensal"), porMes),
     icpc: juntar(de("csp_icpc2"), porMes),
+    virus: juntar(de("virus_spcira"), porData),
   };
 }

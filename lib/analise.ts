@@ -293,3 +293,127 @@ export function summarize(t: Table): Summary {
     : [];
   return { registos: t.nRows, colunas, semanal };
 }
+
+/* ------------------------------------------------------------------ */
+/* Gráfico de várias séries, matriz de correlação e resumo para a IA   */
+/* ------------------------------------------------------------------ */
+
+export type Serie = { label: string; pts: Pt[] };
+export const MAX_SERIES_GRAFICO = 6;
+const MAX_CHAVE = 120;
+
+/** Une as séries por data: uma linha por data existente em alguma série; null onde a série não tem ponto. Chaves s0, s1, … */
+export function alinharSeries(series: Serie[]): Record<string, string | number | null>[] {
+  const datas = [...new Set(series.flatMap((s) => s.pts.map((p) => p.date)))].sort();
+  const mapas = series.map((s) => new Map(s.pts.map((p) => [p.date, p.value])));
+  return datas.map((date) => {
+    const row: Record<string, string | number | null> = { date };
+    mapas.forEach((m, i) => { row[`s${i}`] = m.get(date) ?? null; });
+    return row;
+  });
+}
+
+/** Eixo direito: séries cujo máximo é ≥10× menor que o maior máximo. Com uma só série, nenhuma. */
+export function eixoDireito(series: Serie[]): boolean[] {
+  const maximos = series.map((s) => s.pts.reduce((m, p) => Math.max(m, Math.abs(p.value)), 0));
+  const topo = Math.max(0, ...maximos);
+  if (series.length < 2 || topo === 0) return series.map(() => false);
+  return maximos.map((m) => m * 10 <= topo);
+}
+
+/** Índice 100 = média da série: 100 × valor / média. Sem média válida devolve []. */
+export function normalizarIndice(pts: Pt[]): Pt[] {
+  if (!pts.length) return [];
+  const media = pts.reduce((s, p) => s + p.value, 0) / pts.length;
+  if (!Number.isFinite(media) || media === 0) return [];
+  return pts.map((p) => ({ date: p.date, value: (100 * p.value) / media }));
+}
+
+export type Matriz = { nomes: string[]; r: number[][]; n: number[][] };
+
+/** Pearson r (desfasamento 0) para todos os pares de séries, com n de pares com data comum. */
+export function matrizCorrelacao(series: Serie[]): Matriz {
+  const pares = series.map((a) => series.map((b) => correlate(a.pts, b.pts, 0)));
+  return {
+    nomes: series.map((s) => s.label),
+    r: pares.map((linha) => linha.map((c) => c.pearson)),
+    n: pares.map((linha) => linha.map((c) => c.n)),
+  };
+}
+
+export type ResumoPadroes = {
+  periodo: Period;
+  funcao: AggFn;
+  series: {
+    nome: string;
+    n: number;
+    media: number | null;
+    minimo: { data: string; valor: number } | null;
+    maximo: { data: string; valor: number } | null;
+    tendencia: "crescente" | "decrescente" | "plana" | null;
+    picos: { data: string; valor: number }[];
+    variacaoVsPeriodoAnteriorPct: number | null;
+  }[];
+  correlacao: { nomes: string[]; r: (number | null)[][]; n: number[][] } | null;
+};
+
+/** Sinal do declive da regressão linear sobre o índice do período (indicativo, não estatístico). */
+function tendenciaDe(pts: Pt[]): ResumoPadroes["series"][number]["tendencia"] {
+  if (pts.length < 2) return null;
+  const n = pts.length;
+  const mx = (n - 1) / 2;
+  const my = pts.reduce((s, p) => s + p.value, 0) / n;
+  let num = 0, den = 0;
+  pts.forEach((p, i) => { num += (i - mx) * (p.value - my); den += (i - mx) ** 2; });
+  const declive = num / den;
+  return declive > 0 ? "crescente" : declive < 0 ? "decrescente" : "plana";
+}
+
+/** Resumo agregado de séries no período escolhido: nunca inclui registos. Valores arredondados a 2 casas. */
+export function resumoPadroes(series: Serie[], periodo: Period, funcao: AggFn): ResumoPadroes {
+  const resumos = series.map((s) => {
+    const pts = s.pts.filter((p) => Number.isFinite(p.value));
+    const n = pts.length;
+    if (!n) return { nome: s.label, n: 0, media: null, minimo: null, maximo: null, tendencia: null, picos: [], variacaoVsPeriodoAnteriorPct: null };
+    const ord = [...pts].sort((a, b) => b.value - a.value || (a.date < b.date ? -1 : 1));
+    const ponto = (p: Pt) => ({ data: p.date, valor: r2(p.value) });
+    const ultimo = pts[n - 1], anterior = pts[n - 2];
+    const variacao = n >= 2 && anterior.value !== 0 ? r2(((ultimo.value - anterior.value) / Math.abs(anterior.value)) * 100) : null;
+    return {
+      nome: s.label,
+      n,
+      media: r2(pts.reduce((acc, p) => acc + p.value, 0) / n),
+      minimo: ponto(ord[ord.length - 1]),
+      maximo: ponto(ord[0]),
+      tendencia: tendenciaDe(pts),
+      picos: ord.slice(0, 3).map(ponto),
+      variacaoVsPeriodoAnteriorPct: variacao,
+    };
+  });
+  let correlacao: ResumoPadroes["correlacao"] = null;
+  if (series.length >= 2) {
+    const m = matrizCorrelacao(series);
+    correlacao = { nomes: m.nomes, r: m.r.map((l) => l.map((x) => (Number.isFinite(x) ? r2(x) : null))), n: m.n };
+  }
+  return { periodo, funcao, series: resumos, correlacao };
+}
+
+/** Valida o corpo do pedido de comentário de padrões. Devolve a mensagem de erro, ou null se for válido. */
+export function validarResumoPadroes(x: unknown): string | null {
+  const o = x as Record<string, unknown> | null;
+  if (!o || typeof o !== "object" || Array.isArray(o)) return "O corpo tem de ser um objeto JSON.";
+  if (!Array.isArray(o.series) || o.series.length < 1 || o.series.length > MAX_SERIES_GRAFICO) return `Indique entre 1 e ${MAX_SERIES_GRAFICO} séries.`;
+  if (!["dia", "semana", "mes"].includes(String(o.periodo))) return "Período inválido.";
+  if (!["soma", "media", "contagem"].includes(String(o.funcao))) return "Função de agregação inválida.";
+  for (const s of o.series as unknown[]) {
+    const q = s as Record<string, unknown> | null;
+    if (!q || typeof q !== "object" || typeof q.nome !== "string" || q.nome.length > MAX_CHAVE) return "Nome de série inválido.";
+    if (!Number.isInteger(q.n) || (q.n as number) < 0 || (q.n as number) > 1e6) return "Número de períodos inválido.";
+    if (!Array.isArray(q.picos) || q.picos.length > 3) return "Picos inválidos.";
+  }
+  if (o.correlacao != null) {
+    const c = o.correlacao as Record<string, unknown>;
+    if (!Array.isArray(c.nomes) || c.nomes.length !== o.series.length || !Array.isArray(c.r)) return "Matriz de correlação inválida.";
+  }
+  return null;
+}

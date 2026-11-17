@@ -20,3 +20,23 @@
 @media (min-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 768px) { .topo { grid-template-columns: minmax(200px, 280px) 1fr; align-items: center; } }
 @media (min-width: 1000px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+
+/* Gráfico de várias séries (components/analise.tsx). Cores extra só para a 5.ª e 6.ª série; as quatro primeiras vêm de globals.css (--c1…--c4). */
+.paleta { --serie-5: #7a4fb0; --serie-6: #a16207; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .paleta { --serie-5: #b48be0; --serie-6: #e0b24a; } }
+:root[data-theme="dark"] .paleta { --serie-5: #b48be0; --serie-6: #e0b24a; }
+.avisoFicticio { border-left: 4px solid var(--warn); background: var(--warn-soft); color: var(--ink); padding: 12px 16px; border-radius: 8px; font-weight: 700; overflow-wrap: anywhere; }
+.controlos { display: grid; gap: 12px; grid-template-columns: 1fr; min-width: 0; }
+.escolha { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.escolha legend { font-size: 13px; font-weight: 700; color: var(--ink-3); padding: 0 4px; }
+.opcao { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.opcao input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--accent); }
+.opcao input:disabled + span { opacity: 0.6; }
+.marca { display: inline-flex; align-items: center; min-height: 44px; gap: 8px; font-size: 15px; font-weight: 700; color: var(--ink-2); }
+.marca input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.nota { font-size: 13px; color: var(--ink-3); margin: 0; }
+.matriz td, .matriz th { text-align: center; }
+.matriz th[scope="row"] { text-align: left; }
+.celula { min-width: 84px; font-variant-numeric: tabular-nums; }
+.celula small { display: block; font-size: 11px; color: var(--ink-3); }
+@media (min-width: 640px) { .controlos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

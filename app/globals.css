@@ -364,3 +364,42 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 .corr-card { display: grid; gap: 12px; }
 .corr-leitura { font-size: 16px; }
 .analise details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; }
+
+/* Impressão / PDF: botão, linha de rodapé e regras @media print (A4, fundo branco, tokens claros) */
+.btn.imprimir { width: auto; justify-self: start; }
+@media (min-width: 900px) { .btn.imprimir { justify-self: end; } }
+.so-impressao { display: none; }
+@page { size: A4 portrait; margin: 12mm; }
+@media print {
+  :root {
+    --bg: #ffffff; --surface: #ffffff; --surface-2: #f3f5f4;
+    --ink: #000000; --ink-2: #1a1a1a; --ink-3: #333333; --line: #bbbbbb;
+    --accent: #005a40; --accent-hover: #005a40; --accent-soft: #e6f2ee; --accent-ink: #ffffff;
+    --c1: #007d5a; --c2: #6b7280; --c3: #c2410c; --c4: #1f6fb2; --band: rgba(0, 125, 90, 0.14);
+    --shadow: none; color-scheme: light;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; color: #000; font-size: 11pt; line-height: 1.4; }
+  .wrap { max-width: none; padding: 0; }
+  main { padding: 8px 0 0; gap: 16px; }
+  .masthead { border-bottom: 1px solid #000; }
+  .masthead .wrap { padding-top: 0; padding-bottom: 8px; }
+  .masthead h1 { font-size: 20pt; }
+  .meta { text-align: left; }
+  .so-impressao { display: block; font-size: 9pt; color: #333; border-bottom: 1px solid #bbb; padding-bottom: 4px; margin: 4px 0 8px; }
+  .toc, .skip, .imprimir, .filter-form, .presets, .seg, .dropzone, .opts, .field, .row-actions,
+  .export-actions, .fonte-acao, button, input, select, textarea, .btn { display: none !important; }
+  .card, .status, .pattern, .flag, .chart, .table-wrap, .mcell, .bullet, .kpi, .ai, .recom { box-shadow: none; border: 1px solid #bbb; background: #fff; }
+  .card, .status, .pattern, .flag, .chart, .table-wrap, .mcell, .bullet, .kpi, .ai, .recom, .painel, .analise-item, .kpi, .corr-card, figure, svg, tr, table { break-inside: avoid; }
+  .section-head, h1, h2, h3, h4 { break-after: avoid; }
+  .grid, .analise-grid, .g-2 { grid-template-columns: 1fr !important; }
+  .analise-grid > *, .grid > * { break-inside: avoid; }
+  .chart { height: 240px; margin-top: 6px; }
+  .chart.sm { height: 190px; }
+  .fonte { color: #333; }
+  .fonte a { color: #000; }
+  a { color: #000; text-decoration: none; }
+  .uls-table td, .col-table td { white-space: normal; }
+  details.method { border: 1px solid #bbb; }
+  details.method > div { color: #000; }
+}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analise } from "@/components/analise";
+import { Imprimir, RodapeImpressao } from "@/components/imprimir";
 
 export const metadata: Metadata = { title: "Vigilância da equipa · Boletim de Vigilância Sazonal" };
 
@@ -14,8 +15,10 @@ export default function AnalisePage() {
             <h1>Vigilância da equipa</h1>
             <p className="sub">Carregue os ficheiros da equipa (Vigilância Sazonal, Afluência ao SU) ou qualquer Excel/CSV. Os dados são processados no seu browser.</p>
           </div>
+          <div className="meta"><Imprimir /></div>
         </div>
       </header>
+      <RodapeImpressao />
 
       <nav className="toc" aria-label="Navegação">
         <div className="wrap">

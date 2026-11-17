@@ -1,11 +1,12 @@
 "use client";
 // Análise de ficheiros CSV/Excel. Tudo corre no browser; o servidor só recebe o resumo agregado (botão de IA).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { axis, grid, tip, nf, shortDate } from "@/components/charts";
-import { parseCSV, toTable, retype, aggregateByDate, correlate, summarize, type Table, type ColType, type Period, type AggFn, type Pt, type Column } from "@/lib/analise";
+import { parseCSV, toTable, retype, aggregateByDate, correlate, summarize, alinharSeries, eixoDireito, normalizarIndice, matrizCorrelacao, resumoPadroes, MAX_SERIES_GRAFICO, type Table, type ColType, type Period, type AggFn, type Pt, type Column, type Serie, type Matriz } from "@/lib/analise";
 import { agregarMensal, detectarModelo, tabelaComCensura, type PredefCorr } from "@/lib/modelos";
 import { PainelMensal, PainelModelo, QualidadeDados } from "@/components/analise-modelos";
+import estilos from "@/app/analise/analise.module.css";
 
 type Tab = { nome: string; table: Table };
 type StoredCol = { name: string; type: ColType; values: (string | number | null)[] };
@@ -14,6 +15,7 @@ type StoredProjeto = { id?: number; nome: string; criado: string; tabelas: Store
 /** Série disponível para correlação: coluna numérica (ci ≥ 0) ou contagem de registos por data (ci = -1). */
 type Fonte = { key: string; label: string; ti: number; ci: number };
 type IA = { estado: "vazio" | "a-gerar" | "ok" | "erro"; linhas?: string[]; modelo?: string; erro?: string };
+type TipoGrafico = "linhas" | "barras" | "area";
 
 const DB_NOME = "analise-uls";
 const STORE = "projetos";
@@ -22,6 +24,11 @@ const TIPO_TEXTO: Record<ColType, string> = { date: "Data", number: "Número", c
 const PERIODOS: [Period, string][] = [["dia", "Dia"], ["semana", "Semana"], ["mes", "Mês"]];
 const FUNCOES: [AggFn, string][] = [["soma", "Soma"], ["media", "Média"], ["contagem", "Contagem"]];
 const UNIDADE: Record<Period, string> = { dia: "dias", semana: "semanas", mes: "meses" };
+const TIPOS_GRAFICO: [TipoGrafico, string][] = [["linhas", "Linhas"], ["barras", "Barras"], ["area", "Área"]];
+/** Cores das séries por ordem de escolha: a paleta do globals.css e duas extras (estilos.paleta). */
+const CORES = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--serie-5)", "var(--serie-6)"];
+const DEMO = ["/demo/ULSSA_DEMO_FICTICIO.xlsx", "/demo/Vigilancia_DEMO_FICTICIO.xlsx"];
+const AVISO_FICTICIO = "Dados fictícios de demonstração — não correspondem a atividade real.";
 
 /* ---------- IndexedDB (sem dependências; só no browser) ---------- */
 
@@ -106,18 +113,66 @@ function leitura(r: number, n: number): string {
 
 /* ---------- Gráficos ---------- */
 
-function SerieChart({ data, label }: { data: Pt[]; label: string }) {
+/** Séries escolhidas no mesmo gráfico; as marcadas em `direita` usam o eixo direito. */
+function SeriesGrafico({ dados, series, direita, tipo, label }: { dados: Record<string, string | number | null>[]; series: Serie[]; direita: boolean[]; tipo: TipoGrafico; label: string }) {
+  const temDireita = direita.some(Boolean);
+  const marcas = series.map((s, i) => {
+    const props = { dataKey: `s${i}`, name: s.label, yAxisId: direita[i] ? "dir" : "esq", isAnimationActive: false };
+    if (tipo === "barras") return <Bar key={i} {...props} fill={CORES[i]} />;
+    if (tipo === "area") return <Area key={i} {...props} type="monotone" stroke={CORES[i]} fill={CORES[i]} fillOpacity={0.2} connectNulls />;
+    return <Line key={i} {...props} type="monotone" stroke={CORES[i]} strokeWidth={2} dot={false} connectNulls />;
+  });
+  // Recharts procura eixos e marcas entre os filhos diretos: não os envolver num Fragment.
+  const Quadro = tipo === "barras" ? BarChart : tipo === "area" ? AreaChart : LineChart;
   return (
-    <div className="chart sm" role="img" aria-label={label}>
+    <div className={`chart ${estilos.paleta}`} role="img" aria-label={label}>
       <ResponsiveContainer>
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+        <Quadro data={dados} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
           {grid}
           <XAxis dataKey="date" {...axis} tickFormatter={shortDate} minTickGap={28} />
-          <YAxis {...axis} width={52} tickFormatter={nf(0)} />
+          <YAxis yAxisId="esq" {...axis} width={52} tickFormatter={nf(0)} />
+          {temDireita && <YAxis yAxisId="dir" orientation="right" {...axis} width={52} tickFormatter={nf(0)} />}
           <Tooltip {...tip} labelFormatter={(l) => shortDate(String(l))} formatter={(v) => nf(2)(v)} />
-          <Line dataKey="value" name={label} stroke="var(--c1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-        </LineChart>
+          <Legend wrapperStyle={{ fontSize: 13, color: "var(--ink-2)" }} />
+          {marcas}
+        </Quadro>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Fundo da célula pela força de r: verde para positiva, vermelho para negativa; mais intenso quanto mais forte. */
+function fundoCorrelacao(r: number): string | undefined {
+  if (!Number.isFinite(r)) return undefined;
+  const pct = Math.round(Math.min(1, Math.abs(r)) * 50);
+  return `color-mix(in srgb, ${r < 0 ? "var(--bad)" : "var(--accent)"} ${pct}%, var(--surface))`;
+}
+
+function MatrizCorrelacao({ m, label }: { m: Matriz; label: string }) {
+  return (
+    <div className="table-wrap">
+      <table className={`col-table ${estilos.matriz}`}>
+        <caption>{label}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Variável</th>
+            {m.nomes.map((nome, j) => <th key={j} scope="col">{nome}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {m.nomes.map((nome, i) => (
+            <tr key={i}>
+              <th scope="row">{nome}</th>
+              {m.r[i].map((r, j) => (
+                <td key={j} className={estilos.celula} style={{ background: fundoCorrelacao(r) }}>
+                  <strong>{nf(2)(r)}</strong>
+                  <small>n = {m.n[i][j]}</small>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -171,6 +226,134 @@ function LagChart({ lags, label }: { lags: { lag: number; r: number }[]; label: 
   );
 }
 
+/* ---------- Séries de uma tabela (gráfico, matriz e comentário de IA) ---------- */
+
+type SeriesProps = {
+  t: Tab;
+  periodo: Period;
+  onPeriodo: (p: Period) => void;
+  funcao: AggFn;
+  onFuncao: (f: AggFn) => void;
+  tipo: TipoGrafico;
+  onTipo: (t: TipoGrafico) => void;
+  normalizar: boolean;
+  onNormalizar: (v: boolean) => void;
+  escolha: number[];
+  onEscolha: (cis: number[]) => void;
+  ia: IA;
+  onAnalisar: (series: Serie[]) => void;
+};
+
+function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, onTipo, normalizar, onNormalizar, escolha, onEscolha, ia, onAnalisar }: SeriesProps) {
+  const numericos = t.table.columns.flatMap((c, ci) => (c.type === "number" ? [ci] : []));
+  const escolhidas = escolha.filter((ci) => numericos.includes(ci)).slice(0, MAX_SERIES_GRAFICO);
+  const series: Serie[] = escolhidas.map((ci) => ({ label: t.table.columns[ci].name, pts: serieDe(t, ci, periodo, funcao) }));
+  // Normalizado, todas as séries ficam em torno de 100: não há necessidade de eixo direito.
+  const direita = normalizar ? series.map(() => false) : eixoDireito(series);
+  const exibidas: Serie[] = normalizar ? series.map((s) => ({ label: s.label, pts: normalizarIndice(s.pts) })) : series;
+  const dados = alinharSeries(exibidas);
+  const nomesDireita = series.filter((_, i) => direita[i]).map((s) => s.label);
+  const nomes = series.map((s) => s.label).join(", ");
+
+  const alternar = (ci: number) =>
+    onEscolha(escolhidas.includes(ci) ? escolhidas.filter((x) => x !== ci) : [...escolhidas, ci]);
+
+  return (
+    <>
+      <h3 className="sub-h">Séries no tempo · {PERIODOS.find((p) => p[0] === periodo)?.[1]} · {FUNCOES.find((f) => f[0] === funcao)?.[1]}</h3>
+      <fieldset className={estilos.escolha}>
+        <legend>Variáveis (de 1 a {MAX_SERIES_GRAFICO})</legend>
+        {numericos.map((ci) => {
+          const marcado = escolhidas.includes(ci);
+          const bloqueado = marcado ? escolhidas.length <= 1 : escolhidas.length >= MAX_SERIES_GRAFICO;
+          return (
+            <label key={ci} className={estilos.opcao}>
+              <input type="checkbox" checked={marcado} disabled={bloqueado} onChange={() => alternar(ci)} />
+              <span>{t.table.columns[ci].name}</span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <div className={estilos.controlos}>
+        <label className="field">
+          Tipo de gráfico
+          <select value={tipo} onChange={(e) => onTipo(e.target.value as TipoGrafico)}>
+            {TIPOS_GRAFICO.map(([k, rotulo]) => <option key={k} value={k}>{rotulo}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          Período
+          <select value={periodo} onChange={(e) => onPeriodo(e.target.value as Period)}>
+            {PERIODOS.map(([k, rotulo]) => <option key={k} value={k}>{rotulo}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          Função
+          <select value={funcao} onChange={(e) => onFuncao(e.target.value as AggFn)}>
+            {FUNCOES.map(([k, rotulo]) => <option key={k} value={k}>{rotulo}</option>)}
+          </select>
+        </label>
+        <label className={estilos.marca}>
+          <input type="checkbox" checked={normalizar} onChange={(e) => onNormalizar(e.target.checked)} />
+          Normalizar (índice 100 = média)
+        </label>
+      </div>
+      <p className="hint">Período e função são os mesmos da secção Correlação.</p>
+
+      {series.length === 0 ? (
+        <p className="hint">Escolha pelo menos uma variável numérica.</p>
+      ) : (
+        <>
+          {normalizar && <p className={estilos.nota}>Cada série está dividida pela sua média e multiplicada por 100.</p>}
+          {dados.length === 0 ? (
+            <p className="hint">Sem valores para as variáveis escolhidas.</p>
+          ) : (
+            <SeriesGrafico
+              dados={dados}
+              series={exibidas}
+              direita={direita}
+              tipo={tipo}
+              label={`${nomes} em ${t.nome}, por ${UNIDADE[periodo]}`}
+            />
+          )}
+          {nomesDireita.length > 0 && (
+            <p className={estilos.nota}>Eixo direito: {nomesDireita.join(", ")} (escala pelo menos 10× menor que a das restantes).</p>
+          )}
+
+          <div className="row-actions">
+            <button type="button" className="btn ghost" onClick={() => onAnalisar(series)} disabled={ia.estado === "a-gerar"}>
+              {ia.estado === "a-gerar" ? "A comentar…" : "Comentar padrões com IA"}
+            </button>
+          </div>
+          <p role="status" aria-live="polite" className="hint">{ia.estado === "a-gerar" ? "A gerar o comentário…" : ""}</p>
+          {ia.estado === "erro" && <p role="alert" className="form-error">{ia.erro}</p>}
+          {ia.estado === "ok" && ia.linhas && (
+            <div className="ai">
+              <div className="ai-meta">
+                <span className="tag">Gerado por IA · por validar</span>
+                {ia.modelo && <span>{ia.modelo}</span>}
+              </div>
+              <ul>{ia.linhas.map((l, i) => <li key={i}>{l}</li>)}</ul>
+              <p className="hint">Comentário gerado por IA a partir de resumos agregados; confirme antes de usar.</p>
+            </div>
+          )}
+
+          {series.length >= 2 && (
+            <>
+              <h4>Correlação entre variáveis</h4>
+              <MatrizCorrelacao
+                m={matrizCorrelacao(series)}
+                label={`Correlação de Pearson entre ${nomes} (agregado por ${UNIDADE[periodo]}, sem desfasamento)`}
+              />
+              <p className="hint">Verde: relação positiva; vermelho: negativa; cor mais intensa, relação mais forte. Correlação não implica causalidade.</p>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /* ---------- Componente principal ---------- */
 
 export function Analise() {
@@ -186,6 +369,12 @@ export function Analise() {
   const [yKey, setYKey] = useState("");
   const [maxLag, setMaxLag] = useState(14);
   const [ia, setIa] = useState<IA>({ estado: "vazio" });
+  const [tipoGrafico, setTipoGrafico] = useState<TipoGrafico>("linhas");
+  const [normalizar, setNormalizar] = useState(false);
+  /** Colunas numéricas escolhidas por tabela (índice da tabela → índices de coluna). */
+  const [escolhas, setEscolhas] = useState<Record<number, number[]>>({});
+  /** Comentário de padrões da IA por tabela. */
+  const [iaPadroes, setIaPadroes] = useState<Record<number, IA>>({});
   const entrada = useRef<HTMLInputElement>(null);
 
   const recarregar = () =>
@@ -194,6 +383,8 @@ export function Analise() {
       .catch(() => setEstado("IndexedDB indisponível neste browser: os projetos não podem ser guardados."));
 
   useEffect(() => { void recarregar(); }, []);
+  // Link de demonstração: /analise?demo=1 abre com os dados fictícios já carregados.
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("demo") === "1") void carregarDemo(); }, []);
 
   const fontes = useMemo(() => fontesDe(tabs), [tabs]);
   const fx = fontes.find((f) => f.key === xKey) ?? fontes[0];
@@ -213,6 +404,8 @@ export function Analise() {
 
   // A análise de IA deixa de corresponder assim que muda o que está a ser analisado.
   useEffect(() => { setIa({ estado: "vazio" }); }, [tabs, fx, fy, periodo, funcao, maxLag]);
+  // O mesmo para o comentário de padrões: deixa de corresponder quando mudam as séries ou o período.
+  useEffect(() => { setIaPadroes({}); }, [tabs, periodo, funcao, escolhas]);
 
   async function carregar(lista: File[]) {
     if (!lista.length) return;
@@ -241,6 +434,41 @@ export function Analise() {
     setTabs((prev) => [...prev, ...validos]);
     setALer(false);
     setEstado([validos.length ? `${validos.length} tabela(s) carregada(s).` : "", ...erros].filter(Boolean).join(" "));
+  }
+
+  /** Carrega os ficheiros de demonstração pelo mesmo caminho que os ficheiros arrastados. */
+  async function carregarDemo() {
+    setEstado("A carregar dados de demonstração…");
+    try {
+      const ficheiros = await Promise.all(
+        DEMO.map(async (url) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return new File([await res.blob()], url.split("/").pop() ?? "demo.xlsx");
+        }),
+      );
+      await carregar(ficheiros);
+    } catch (e) {
+      setEstado(`Não foi possível carregar os dados de demonstração (${(e as Error).message}).`);
+    }
+  }
+
+  /** Comentário da IA sobre os padrões das séries escolhidas. Envia só o resumo agregado. */
+  async function analisarPadroes(ti: number, series: Serie[]) {
+    const marca = (r: IA) => setIaPadroes((p) => ({ ...p, [ti]: r }));
+    marca({ estado: "a-gerar" });
+    const corpo = JSON.stringify({ tipo: "padroes", tabela: tabs[ti].nome, ...resumoPadroes(series, periodo, funcao) });
+    if (new TextEncoder().encode(corpo).length > MAX_BYTES) {
+      marca({ estado: "erro", erro: "O resumo é demasiado grande: escolha menos variáveis." });
+      return;
+    }
+    try {
+      const res = await fetch("/api/analise-ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
+      const j = (await res.json()) as { ok: boolean; text?: string[]; model?: string; error?: string };
+      marca(j.ok && j.text ? { estado: "ok", linhas: j.text, modelo: j.model } : { estado: "erro", erro: j.error ?? "Erro desconhecido." });
+    } catch {
+      marca({ estado: "erro", erro: "Não foi possível contactar o servidor." });
+    }
   }
 
   const alterarTipo = (ti: number, ci: number, tipo: ColType) =>
@@ -302,7 +530,7 @@ export function Analise() {
   }
   const modelos = tabs.map((t) => detectarModelo(t.table));
   const mensal = useMemo(() => agregarMensal(tabs.map((t) => t.table)), [tabs]);
-  const temMensal = !!(mensal.su || mensal.intern || mensal.sud || mensal.csp || mensal.icpc);
+  const temMensal = !!(mensal.su || mensal.intern || mensal.sud || mensal.csp || mensal.icpc || mensal.virus);
 
   async function analisarIa() {
     if (!corr) return;
@@ -342,8 +570,11 @@ export function Analise() {
         ? `${corr.nomeX} tende a anteceder ${corr.nomeY} em ${melhor.lag} ${UNIDADE[periodo]}.`
         : `${corr.nomeY} tende a anteceder ${corr.nomeX} em ${-melhor.lag} ${UNIDADE[periodo]}.`;
 
+  const temFicticio = tabs.some((t) => /FICTICIO/i.test(t.nome));
+
   return (
     <div className="analise">
+      {temFicticio && <p role="note" className={estilos.avisoFicticio}>{AVISO_FICTICIO}</p>}
       <section aria-labelledby="h-modelo" className="card">
         <h2 id="h-modelo">Ficheiro mensal da ULSSA</h2>
         <p><a className="btn" href="/api/modelo-mensal" download>Descarregar modelo (.xlsx)</a></p>
@@ -373,6 +604,9 @@ export function Analise() {
           />
         </div>
         <p className="hint">Os ficheiros ficam só neste browser; nada é enviado para o servidor.</p>
+        <div className="row-actions">
+          <button type="button" className="btn ghost" onClick={() => void carregarDemo()} disabled={aLer}>Carregar dados de demonstração (fictícios)</button>
+        </div>
         <p role="status" aria-live="polite" className="hint">{estado}</p>
       </section>
 
@@ -442,19 +676,21 @@ export function Analise() {
           <QualidadeDados table={t.table} />
 
           {t.table.columns.some((c) => c.type === "date") ? (
-            <>
-              <h3 className="sub-h">Séries no tempo · {PERIODOS.find((p) => p[0] === periodo)?.[1]} · {FUNCOES.find((f) => f[0] === funcao)?.[1]}</h3>
-              <div className="analise-grid">
-                {t.table.columns.map((c, ci) =>
-                  c.type !== "number" ? null : (
-                    <div key={ci} className="analise-item">
-                      <h4>{c.name}</h4>
-                      <SerieChart data={serieDe(t, ci, periodo, funcao)} label={`${c.name} em ${t.nome}, por ${UNIDADE[periodo]}`} />
-                    </div>
-                  ),
-                )}
-              </div>
-            </>
+            <SeriesTabela
+              t={t}
+              periodo={periodo}
+              onPeriodo={setPeriodo}
+              funcao={funcao}
+              onFuncao={setFuncao}
+              tipo={tipoGrafico}
+              onTipo={setTipoGrafico}
+              normalizar={normalizar}
+              onNormalizar={setNormalizar}
+              escolha={escolhas[ti] ?? t.table.columns.flatMap((c, ci) => (c.type === "number" ? [ci] : [])).slice(0, 1)}
+              onEscolha={(cis) => setEscolhas((p) => ({ ...p, [ti]: cis }))}
+              ia={iaPadroes[ti] ?? { estado: "vazio" }}
+              onAnalisar={(series) => void analisarPadroes(ti, series)}
+            />
           ) : (
             <p className="hint">Sem coluna de data: não há séries temporais. Veja as categorias abaixo.</p>
           )}

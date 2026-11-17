@@ -5,6 +5,7 @@ import { dgsIndicators, regionalDgsLevel, faixaMensal, ateMes, DGS_TEXT, type Dg
 import { DateFilter } from "@/components/date-filter";
 import { RiskGauge, BulletRow } from "@/components/risk-viz";
 import { Fonte, fmtDate } from "@/components/ui";
+import { Imprimir, RodapeImpressao } from "@/components/imprimir";
 
 export const metadata: Metadata = { title: "Nível de risco · ULS Santo António · Boletim" };
 export const revalidate = 10800;
@@ -52,9 +53,11 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
           </div>
           <div className="meta">
             <span>Gerado a <strong>{now.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "long", timeStyle: "short" })}</strong></span>
+            <Imprimir />
           </div>
         </div>
       </header>
+      <RodapeImpressao />
 
       <nav className="toc" aria-label="Secções do site">
         <div className="wrap">

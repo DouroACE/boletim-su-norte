@@ -37,6 +37,10 @@ const INSTRUCOES: Cell[][] = [
   texto(""),
   texto("Códigos ICPC-2 (CSP_ICPC2)", true),
   ...ICPC.map(([c, d]) => texto(`${c}: ${d}`)),
+  texto(""),
+  texto("Vírus respiratórios (Virus_SPCIRA)", true),
+  texto("Semanal, enviado pelo SPCIRA. Semana = data da segunda-feira da semana epidemiológica (AAAA-MM-DD)."),
+  texto("Por vírus: positivos e negativos de testes laboratoriais na semana. Positividade = positivos / (positivos + negativos)."),
 ];
 
 export async function GET() {
