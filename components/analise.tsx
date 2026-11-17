@@ -8,14 +8,14 @@ import { agregarMensal, detectarModelo, tabelaComCensura, type PredefCorr } from
 import { PainelMensal, PainelModelo, QualidadeDados } from "@/components/analise-modelos";
 import estilos from "@/app/analise/analise.module.css";
 
-type Tab = { nome: string; table: Table };
+export type Tab = { nome: string; table: Table };
 type StoredCol = { name: string; type: ColType; values: (string | number | null)[] };
 type StoredTab = { nome: string; nRegistos: number; colunas: StoredCol[] };
-type StoredProjeto = { id?: number; nome: string; criado: string; tabelas: StoredTab[] };
+export type StoredProjeto = { id?: number; nome: string; criado: string; tabelas: StoredTab[] };
 /** Série disponível para correlação: coluna numérica (ci ≥ 0) ou contagem de registos por data (ci = -1). */
 type Fonte = { key: string; label: string; ti: number; ci: number };
-type IA = { estado: "vazio" | "a-gerar" | "ok" | "erro"; linhas?: string[]; modelo?: string; erro?: string };
-type TipoGrafico = "linhas" | "barras" | "area";
+export type IA = { estado: "vazio" | "a-gerar" | "ok" | "erro"; linhas?: string[]; modelo?: string; erro?: string };
+export type TipoGrafico = "linhas" | "barras" | "area";
 
 const DB_NOME = "analise-uls";
 const STORE = "projetos";
@@ -41,7 +41,7 @@ function abrirDb(): Promise<IDBDatabase> {
   });
 }
 
-async function dbOp<T>(modo: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+export async function dbOp<T>(modo: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await abrirDb();
   return new Promise<T>((resolve, reject) => {
     const t = db.transaction(STORE, modo);
@@ -64,7 +64,7 @@ const paraGuardar = (t: Tab): StoredTab => ({
   })),
 });
 
-const deGuardado = (s: StoredTab): Tab => ({
+export const deGuardado = (s: StoredTab): Tab => ({
   nome: s.nome,
   table: {
     nRows: s.nRegistos,
@@ -113,6 +113,9 @@ function leitura(r: number, n: number): string {
 
 /* ---------- Gráficos ---------- */
 
+/** Índices como o ÍCARO ficam entre 0 e 2: com valores pequenos o eixo mostra casas decimais para as marcas não se repetirem. */
+const marcaEixo = (v: number) => nf(v === 0 || Math.abs(v) >= 10 ? 0 : Math.abs(v) < 1 ? 2 : 1)(v);
+
 /** Séries escolhidas no mesmo gráfico; as marcadas em `direita` usam o eixo direito. */
 function SeriesGrafico({ dados, series, direita, tipo, label }: { dados: Record<string, string | number | null>[]; series: Serie[]; direita: boolean[]; tipo: TipoGrafico; label: string }) {
   const temDireita = direita.some(Boolean);
@@ -130,8 +133,8 @@ function SeriesGrafico({ dados, series, direita, tipo, label }: { dados: Record<
         <Quadro data={dados} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
           {grid}
           <XAxis dataKey="date" {...axis} tickFormatter={shortDate} minTickGap={28} />
-          <YAxis yAxisId="esq" {...axis} width={52} tickFormatter={nf(0)} />
-          {temDireita && <YAxis yAxisId="dir" orientation="right" {...axis} width={52} tickFormatter={nf(0)} />}
+          <YAxis yAxisId="esq" {...axis} width={52} tickFormatter={marcaEixo} />
+          {temDireita && <YAxis yAxisId="dir" orientation="right" {...axis} width={52} tickFormatter={marcaEixo} />}
           <Tooltip {...tip} labelFormatter={(l) => shortDate(String(l))} formatter={(v) => nf(2)(v)} />
           <Legend wrapperStyle={{ fontSize: 13, color: "var(--ink-2)" }} />
           {marcas}
@@ -242,9 +245,11 @@ type SeriesProps = {
   onEscolha: (cis: number[]) => void;
   ia: IA;
   onAnalisar: (series: Serie[]) => void;
+  /** Na Vigilância, período e função vêm da secção Correlação; noutras páginas não há essa secção. */
+  notaCorrelacao?: boolean;
 };
 
-function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, onTipo, normalizar, onNormalizar, escolha, onEscolha, ia, onAnalisar }: SeriesProps) {
+export function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, onTipo, normalizar, onNormalizar, escolha, onEscolha, ia, onAnalisar, notaCorrelacao = true }: SeriesProps) {
   const numericos = t.table.columns.flatMap((c, ci) => (c.type === "number" ? [ci] : []));
   const escolhidas = escolha.filter((ci) => numericos.includes(ci)).slice(0, MAX_SERIES_GRAFICO);
   const series: Serie[] = escolhidas.map((ci) => ({ label: t.table.columns[ci].name, pts: serieDe(t, ci, periodo, funcao) }));
@@ -298,7 +303,7 @@ function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, onTipo, n
           Normalizar (índice 100 = média)
         </label>
       </div>
-      <p className="hint">Período e função são os mesmos da secção Correlação.</p>
+      {notaCorrelacao && <p className="hint">Período e função são os mesmos da secção Correlação.</p>}
 
       {series.length === 0 ? (
         <p className="hint">Escolha pelo menos uma variável numérica.</p>
@@ -352,6 +357,19 @@ function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, onTipo, n
       )}
     </>
   );
+}
+
+/** Pede à IA um comentário sobre os padrões das séries. Envia só o resumo agregado (médias, picos, correlações). */
+export async function pedirPadroes(tabela: string, series: Serie[], periodo: Period, funcao: AggFn): Promise<IA> {
+  const corpo = JSON.stringify({ tipo: "padroes", tabela, ...resumoPadroes(series, periodo, funcao) });
+  if (new TextEncoder().encode(corpo).length > MAX_BYTES) return { estado: "erro", erro: "O resumo é demasiado grande: escolha menos variáveis." };
+  try {
+    const res = await fetch("/api/analise-ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
+    const j = (await res.json()) as { ok: boolean; text?: string[]; model?: string; error?: string };
+    return j.ok && j.text ? { estado: "ok", linhas: j.text, modelo: j.model } : { estado: "erro", erro: j.error ?? "Erro desconhecido." };
+  } catch {
+    return { estado: "erro", erro: "Não foi possível contactar o servidor." };
+  }
 }
 
 /* ---------- Componente principal ---------- */
@@ -457,18 +475,7 @@ export function Analise() {
   async function analisarPadroes(ti: number, series: Serie[]) {
     const marca = (r: IA) => setIaPadroes((p) => ({ ...p, [ti]: r }));
     marca({ estado: "a-gerar" });
-    const corpo = JSON.stringify({ tipo: "padroes", tabela: tabs[ti].nome, ...resumoPadroes(series, periodo, funcao) });
-    if (new TextEncoder().encode(corpo).length > MAX_BYTES) {
-      marca({ estado: "erro", erro: "O resumo é demasiado grande: escolha menos variáveis." });
-      return;
-    }
-    try {
-      const res = await fetch("/api/analise-ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo });
-      const j = (await res.json()) as { ok: boolean; text?: string[]; model?: string; error?: string };
-      marca(j.ok && j.text ? { estado: "ok", linhas: j.text, modelo: j.model } : { estado: "erro", erro: j.error ?? "Erro desconhecido." });
-    } catch {
-      marca({ estado: "erro", erro: "Não foi possível contactar o servidor." });
-    }
+    marca(await pedirPadroes(tabs[ti].nome, series, periodo, funcao));
   }
 
   const alterarTipo = (ti: number, ci: number, tipo: ColType) =>

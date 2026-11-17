@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchFriesaPorto, fetchIcaro, fetchIpmaAvisos, type Aviso } from "@/lib/sources";
+import { fetchFriesaPorto, fetchIcaro, fetchIpmaAvisos, fetchNorte, fetchObitosDiarios, type Aviso } from "@/lib/sources";
 import { Fonte } from "@/components/ui";
 import { RelatoriosSemanais } from "@/components/relatorios";
 
@@ -16,11 +16,23 @@ export default async function RelatoriosPage() {
   const hoje = now.toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" });
   const desde = new Date(now.getTime() - DIAS_HISTORICO * 864e5).toISOString().slice(0, 10);
 
-  const [icaro, friesa65, avisos] = await Promise.all([
+  const [icaro, friesa, avisos, norte, obitos] = await Promise.all([
     orNull(fetchIcaro(desde)),
-    orNull(fetchFriesaPorto(desde).then((r) => r.mais65)),
+    orNull(fetchFriesaPorto(desde)),
     orNull(fetchIpmaAvisos().then((a): Aviso[] => a.filter((x) => x.distrito === "Porto"))),
+    orNull(fetchNorte(desde)),
+    orNull(fetchObitosDiarios(desde)),
   ]);
+  const friesa65 = friesa?.mais65 ?? null;
+  // Séries públicas diárias que o bloco «Relacionar variáveis» oferece ao lado dos registos semanais.
+  const publicos = [
+    { nome: "Índice ÍCARO", pts: icaro },
+    { nome: "Índice FRIESA Porto (65+)", pts: friesa65 },
+    { nome: "Índice FRIESA Porto (geral)", pts: friesa?.geral ?? null },
+    { nome: obitos?.norte === false ? "Óbitos certificados por dia (Portugal, SICO)" : "Óbitos por dia, Região Norte (eVM)", pts: obitos?.pontos ?? null },
+    { nome: "Episódios de urgência, Região Norte", pts: norte?.episodios ?? null },
+    { nome: "% urgências respiratórias, Região Norte", pts: norte?.pctRespiratoria ?? null },
+  ];
 
   return (
     <>
@@ -47,13 +59,13 @@ export default async function RelatoriosPage() {
       </nav>
 
       <main id="conteudo" className="wrap">
-        <RelatoriosSemanais hojeIso={hoje} icaro={icaro} friesa65={friesa65} avisos={avisos} />
+        <RelatoriosSemanais hojeIso={hoje} icaro={icaro} friesa65={friesa65} avisos={avisos} publicos={publicos} />
 
-        <section className="card" aria-labelledby="h-fontes">
-          <h2 id="h-fontes">Fontes da sugestão de USP</h2>
+        <details className="card dobra">
+          <summary><h2 id="h-fontes">Fontes</h2></summary>
           <p className="hint">A sugestão usa os valores públicos da semana; a classificação e o texto final são da equipa.</p>
-          <Fonte ids={["icaro", "friesa", "ipmaAvisos"]} />
-        </section>
+          <Fonte ids={["icaro", "friesa", "ipmaAvisos", "gripal", obitos?.norte === false ? "obitos" : "evm"]} />
+        </details>
       </main>
 
       <footer>

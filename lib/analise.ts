@@ -298,6 +298,45 @@ export function summarize(t: Table): Summary {
 /* Gráfico de várias séries, matriz de correlação e resumo para a IA   */
 /* ------------------------------------------------------------------ */
 
+/** Tabela com uma coluna "Data" e uma coluna numérica, a partir de pontos diários. */
+export function tabelaDePontos(nome: string, pts: Pt[]): Table {
+  return {
+    nRows: pts.length,
+    columns: [
+      { name: "Data", type: "date", values: pts.map((p) => new Date(`${p.date}T00:00:00Z`)) },
+      { name: nome, type: "number", values: pts.map((p) => p.value) },
+    ],
+  };
+}
+
+/**
+ * Junta tabelas de origens diferentes numa só, em formato longo: coluna "Data" e uma coluna por variável
+ * numérica ("prefixo · nome"). Cada linha vem de uma só tabela e as colunas das outras ficam a null,
+ * que a agregação por data ignora. Tabelas sem coluna de data ou sem números ficam de fora.
+ */
+export function juntarTabelas(partes: { prefixo: string; table: Table }[]): Table {
+  const usadas = partes.flatMap((p) => {
+    const d = p.table.columns.find((c) => c.type === "date");
+    const nums = p.table.columns.filter((c) => c.type === "number");
+    return d && nums.length && p.table.nRows ? [{ ...p, d, nums }] : [];
+  });
+  const total = usadas.reduce((s, u) => s + u.table.nRows, 0);
+  const datas: Cell[] = [];
+  const colunas: Column[] = [];
+  let inicio = 0;
+  for (const u of usadas) {
+    const n = u.table.nRows;
+    for (let i = 0; i < n; i++) datas.push(u.d.values[i] ?? null);
+    for (const c of u.nums) {
+      const values: Cell[] = new Array(total).fill(null);
+      for (let i = 0; i < n; i++) values[inicio + i] = c.values[i] ?? null;
+      colunas.push({ name: u.prefixo ? `${u.prefixo} · ${c.name}` : c.name, type: "number", values });
+    }
+    inicio += n;
+  }
+  return { nRows: total, columns: [{ name: "Data", type: "date", values: datas }, ...colunas] };
+}
+
 export type Serie = { label: string; pts: Pt[] };
 export const MAX_SERIES_GRAFICO = 6;
 const MAX_CHAVE = 120;

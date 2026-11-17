@@ -9,6 +9,7 @@ import {
   sobrepoeEpocaCritica, sugestaoUSP, tabelaHtml, textoCSP, textoEmail, ultimaSemanaCompleta, validarCopia,
   type Nivel, type RegistoSemanal,
 } from "@/lib/relatorios";
+import { RelacionarVariaveis, type SeriePublica } from "@/components/relacionar";
 import s from "@/app/relatorios/relatorios.module.css";
 
 /** Chave do localStorage. Só este browser; cada leitura e escrita está em try/catch. */
@@ -87,9 +88,11 @@ interface Props {
   icaro: Point[] | null;
   friesa65: Point[] | null;
   avisos: Aviso[] | null;
+  /** Séries públicas diárias para o bloco «Relacionar variáveis». */
+  publicos: SeriePublica[];
 }
 
-export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) {
+export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos, publicos }: Props) {
   const uid = useId();
   const id = (nome: string) => `${uid}-${nome}`;
 
@@ -223,8 +226,8 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) 
   return (
     <div className={s.pagina}>
       {/* a. Semana */}
-      <section aria-labelledby={id("h-semana")} className="card">
-        <h2 id={id("h-semana")}>Semana</h2>
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-semana")}>Semana</h2></summary>
         <p className="hint">Semana de segunda a domingo. Por omissão, a última semana completa.</p>
         <div className={s.semana}>
           <button type="button" className="btn ghost" onClick={() => irPara(semanaAnterior(segunda))}>‹ Semana anterior</button>
@@ -240,11 +243,11 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) 
           <button type="button" className="btn ghost" onClick={() => irPara(semanaSeguinte(segunda))}>Semana seguinte ›</button>
         </div>
         <p className={s.rotulo}><strong>{rotuloSemana(segunda)}</strong></p>
-      </section>
+      </details>
 
       {/* b. Registo */}
-      <section aria-labelledby={id("h-registo")} className="card">
-        <h2 id={id("h-registo")}>Registo</h2>
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-registo")}>Registo</h2></summary>
         <p className="hint">Os registos ficam só neste browser. Exporte uma cópia de segurança regularmente.</p>
         {epocaCritica && (
           <p className={s.nota} role="note">Esta semana está na época crítica dos CSP (15/11 a 31/01).</p>
@@ -359,11 +362,11 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) 
           <button type="button" className="btn" onClick={guardar} disabled={!storeOk}>Guardar</button>
         </div>
         <p className={s.estado} role="status" aria-live="polite">{msgRegisto}</p>
-      </section>
+      </details>
 
       {/* c. Enviar */}
-      <section aria-labelledby={id("h-envio")} className="card">
-        <h2 id={id("h-envio")}>Enviar à DE-SNS</h2>
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-envio")}>Enviar à DE-SNS</h2></summary>
         <p className="hint">Texto com os 11 campos desta semana, tal como está no formulário (guardado ou não).</p>
         <textarea id={id("previa")} className={s.previa} readOnly rows={12} value={textoEnvio} aria-label="Pré-visualização do e-mail" />
         <div className={s.acoes}>
@@ -383,11 +386,11 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) 
           </button>
         </div>
         <p className={s.estado} role="status" aria-live="polite">{msgEnvio}</p>
-      </section>
+      </details>
 
       {/* d. Histórico */}
-      <section aria-labelledby={id("h-hist")} className="card">
-        <h2 id={id("h-hist")}>Histórico</h2>
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-hist")}>Histórico</h2></summary>
         {todos.length === 0 ? (
           <p className="hint">Ainda não há semanas guardadas neste browser.</p>
         ) : (
@@ -447,7 +450,13 @@ export function RelatoriosSemanais({ hojeIso, icaro, friesa65, avisos }: Props) 
           </label>
         </div>
         <p className={s.estado} role="status" aria-live="polite">{msgHistorico}</p>
-      </section>
+      </details>
+
+      {/* e. Relacionar */}
+      <details className="card dobra" open>
+        <summary><h2 id={id("h-relacionar")}>Relacionar variáveis</h2></summary>
+        <RelacionarVariaveis registos={todos} publicos={publicos} />
+      </details>
     </div>
   );
 }
