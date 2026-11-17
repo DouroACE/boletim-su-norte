@@ -63,6 +63,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
             <li><a href="/painel" aria-current="page">Painel de risco</a></li>
             <li><a href="/analise">Vigilância da equipa →</a></li>
             <li><a href="/alertas">Alertas →</a></li>
+            <li><a href="/relatorios">Relatórios →</a></li>
             <li><a href={`/flags-ia${q}`}>Flags de IA →</a></li>
             <li><a href={`/exportar${q}`}>Exportar →</a></li>
           </ul>

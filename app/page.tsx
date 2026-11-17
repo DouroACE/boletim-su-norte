@@ -176,6 +176,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <li><a href={`/painel${rangeQuery(range)}`}>Painel de risco →</a></li>
             <li><a href="/analise">Vigilância da equipa →</a></li>
             <li><a href="/alertas">Alertas →</a></li>
+            <li><a href="/relatorios">Relatórios →</a></li>
             <li><a href={`/flags-ia${rangeQuery(range)}`}>Flags de IA →</a></li>
             <li><a href={`/exportar${rangeQuery(range)}`}>Exportar →</a></li>
           </ul>

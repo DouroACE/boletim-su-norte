@@ -47,6 +47,7 @@ export default async function AlertasPage() {
             <li><a href="/">← Boletim</a></li>
             <li><a href="/painel">Painel</a></li>
             <li><a href="/analise">Vigilância</a></li>
+            <li><a href="/relatorios">Relatórios</a></li>
           </ul>
         </div>
       </nav>

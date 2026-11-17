@@ -28,6 +28,7 @@ Os dados da equipa (ficheiros de mortalidade, alertas e afluência) não entram 
 - **Painel de risco** (`/painel`): nível 0–3 do Plano Sazonal 2026–2027 (DGS, p. 20) com a procura do SU e a ocupação da ULSSA, e faixa dos últimos 12 meses publicados.
 - **Flags de IA** (`/flags-ia`): sinais propostos por um modelo de linguagem a partir dos indicadores da ULSSA, FRIESA, óbitos regionais e avisos do Porto.
 - **Exportar** (`/exportar`): Excel com as variáveis escolhidas e o período (`/api/exportar`).
+- **Relatórios** (`/relatorios`): registo semanal para a DE-SNS, com texto e tabela para copiar e histórico por período. Fica só no browser; exporte cópias `.json`.
 
 ## Níveis e alertas
 

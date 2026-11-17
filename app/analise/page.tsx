@@ -23,6 +23,7 @@ export default function AnalisePage() {
             <li><a href="/">← Boletim</a></li>
             <li><a href="/painel">Painel</a></li>
             <li><a href="/alertas">Alertas</a></li>
+            <li><a href="/relatorios">Relatórios</a></li>
           </ul>
         </div>
       </nav>

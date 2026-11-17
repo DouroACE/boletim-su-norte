@@ -61,6 +61,7 @@ export default async function FlagsPage({ searchParams }: { searchParams: Promis
             <li><a href={`/painel${q}`}>Painel de risco</a></li>
             <li><a href="/analise">Vigilância da equipa →</a></li>
             <li><a href="/alertas">Alertas →</a></li>
+            <li><a href="/relatorios">Relatórios →</a></li>
             <li><a href={`/flags-ia${q}`} aria-current="page">Flags de IA</a></li>
             <li><a href={`/exportar${q}`}>Exportar →</a></li>
           </ul>
