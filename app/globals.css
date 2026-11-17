@@ -259,3 +259,43 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
   .filter-form label { max-width: none; }
   .filter-form button { flex: 1 1 100%; }
 }
+
+/* Painel de risco — cores dos níveis DGS (0 Verde, 1 Amarelo, 2 Laranja, 3 Vermelho) com texto de contraste AA */
+:root { --dgs0: #2e7d32; --dgs1: #e3b505; --dgs2: #e06c1b; --dgs3: #c0262d; --on-dgs0: #fff; --on-dgs1: #2b2000; --on-dgs2: #2b1300; --on-dgs3: #fff; }
+.dgs-0 { --dgs: var(--dgs0); --on-dgs: var(--on-dgs0); }
+.dgs-1 { --dgs: var(--dgs1); --on-dgs: var(--on-dgs1); }
+.dgs-2 { --dgs: var(--dgs2); --on-dgs: var(--on-dgs2); }
+.dgs-3 { --dgs: var(--dgs3); --on-dgs: var(--on-dgs3); }
+.dgs-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--dgs); color: var(--on-dgs); white-space: nowrap; }
+.risk-card { display: grid; gap: 8px; align-content: start; }
+.gauge { width: 100%; max-width: 280px; margin: 4px auto 0; display: block; }
+.gauge-seg { fill: none; stroke: var(--dgs); stroke-width: 20; }
+.gauge-needle { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.gauge-hub { fill: var(--ink); }
+.gauge-tick { fill: var(--ink-3); font-size: 12px; }
+.risk-level { text-align: center; }
+.risk-level .dgs-badge { font-size: 20px; padding: 4px 16px; }
+.center { text-align: center; }
+.partial { font-size: 13px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 8px 12px; }
+.donut { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.donut > svg { width: 150px; height: 150px; flex: none; }
+.donut ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.donut-track { fill: none; stroke: var(--surface-2); stroke-width: 20; }
+.donut-seg { fill: none; stroke: var(--lv); stroke-width: 20; }
+.donut-n { fill: var(--ink); font-size: 26px; font-weight: 700; }
+.donut-sub { fill: var(--ink-3); font-size: 11px; }
+.bullets { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.bullet { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) 140px; gap: 12px; align-items: center; min-height: 44px; font-size: 14px; border-bottom: 1px solid var(--line); }
+.bullet-label { font-weight: 700; color: var(--ink-2); }
+.bullet-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.bullet-empty { background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 12px); border: 1px dashed var(--line); }
+.bullet-zone { position: absolute; top: 0; bottom: 0; background: var(--dgs); opacity: 0.35; }
+.bullet-mark { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; background: var(--ink); border-radius: 2px; }
+.bullet-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.muted { color: var(--ink-3); font-weight: 400; }
+.dgs-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; margin: 14px 0 6px; font-size: 13px; color: var(--ink-2); }
+@media (max-width: 640px) {
+  .bullet { grid-template-columns: 1fr auto; padding: 8px 0; }
+  .bullet-track { grid-column: 1 / -1; grid-row: 2; }
+  .bullet-value { grid-row: 1; grid-column: 2; }
+}

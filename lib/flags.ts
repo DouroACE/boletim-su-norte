@@ -57,7 +57,7 @@ export function toIndicators(flags: Flag[], uls: UlsRow[]): Indicator[] {
   for (const u of uls) {
     for (const [k, m, nome] of [["obitos", u.obitos, "Óbitos certificados (SICO)"], ["urgencias", u.urgencias, "Atendimentos em urgência"]] as const) {
       if (m.valor == null || !m.mes) continue;
-      const comp = m.homologo != null && m.varPct != null ? `; mesmo mês do ano anterior: ${m.homologo} (${signed(m.varPct)}${m.z != null ? `, z = ${m.z.toFixed(1)}` : ""})` : "; sem mês homólogo";
+      const comp = m.homologo != null && m.varPct != null ? `; mesmo mês do ano anterior: ${m.homologo} (${signed(m.varPct)}${m.z != null ? `, z = ${m.z.toFixed(1)}` : ""})` : m.suspeito ? "; comparação suspensa: a SPMS repetiu um mês na publicação (a rever)" : "; sem mês homólogo";
       out.push({ id: `${k}:${u.key}`, label: `${nome} · ULS ${u.nome}`, level: m.level, detail: `${MES(m.mes)}: ${m.valor}${comp}.` });
     }
   }

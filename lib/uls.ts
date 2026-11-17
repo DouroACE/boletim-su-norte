@@ -33,14 +33,22 @@ export function ulsOf(instituicao: string): Uls | undefined {
 export type MonthVal = { mes: string; valor: number };
 
 /** Os datasets de urgência publicam valores acumulados no ano; converte para valores mensais.
- *  shortcut: se faltar um mês publicado, o seguinte absorve os dois; só muda se a SPMS deixar buracos. */
+ *  Se a SPMS repetir o acumulado do mês anterior (mês por atualizar), esse mês e o seguinte, que soma os dois,
+ *  ficam NaN ("a rever") em vez de entrarem nas comparações.
+ *  shortcut: um mês em falta na publicação continua a ser absorvido pelo seguinte; só muda se a SPMS deixar buracos. */
 export function decumulate<T extends { mes: string }>(rows: T[], fields: (keyof T)[]): T[] {
   const sorted = [...rows].sort((a, b) => a.mes.localeCompare(b.mes));
+  let stuckBefore = false;
   return sorted.map((r, i) => {
     const prev = sorted[i - 1];
-    if (!prev || prev.mes.slice(0, 4) !== r.mes.slice(0, 4)) return r;
+    if (!prev || prev.mes.slice(0, 4) !== r.mes.slice(0, 4)) {
+      stuckBefore = false;
+      return r;
+    }
+    const stuck = fields.every((f) => Number(r[f]) === Number(prev[f]));
     const out = { ...r };
-    for (const f of fields) out[f] = (Number(r[f]) - Number(prev[f])) as T[keyof T];
+    for (const f of fields) out[f] = (stuck || stuckBefore ? NaN : Number(r[f]) - Number(prev[f])) as T[keyof T];
+    stuckBefore = stuck;
     return out;
   });
 }
@@ -53,6 +61,7 @@ export type UlsMetric = {
   z: number | null; // só para contagens pequenas (óbitos): teste de Poisson vs homólogo
   level: Level;
   serie: MonthVal[];
+  suspeito?: boolean; // o mês ou o homólogo vieram de uma publicação repetida pela SPMS
 };
 
 const EMPTY: UlsMetric = { mes: null, valor: null, homologo: null, varPct: null, z: null, level: "sem-dados", serie: [] };
@@ -64,6 +73,9 @@ export function compareHomologous(serie: MonthVal[], mode: "poisson" | "pct"): U
   if (!serie.length) return EMPTY;
   const last = serie.at(-1)!;
   const h = serie.find((s) => s.mes === prevYear(last.mes))?.valor ?? null;
+  if (!Number.isFinite(last.valor) || (h != null && !Number.isFinite(h))) {
+    return { ...EMPTY, mes: last.mes, valor: Number.isFinite(last.valor) ? last.valor : null, suspeito: true, serie: serie.slice(-13) };
+  }
   const varPct = h ? ((last.valor - h) / h) * 100 : null;
   const z = h && mode === "poisson" ? (last.valor - h) / Math.sqrt(h) : null;
   let level: Level = "sem-dados";

@@ -51,6 +51,7 @@ export default async function FlagsPage({ searchParams }: { searchParams: Promis
         <div className="wrap">
           <ul>
             <li><a href={`/${rangeQuery(range)}`}>← Boletim</a></li>
+            <li><a href={`/painel${rangeQuery(range)}`}>Painel de risco</a></li>
             <li><a href="#ia">Flags propostas</a></li>
             <li><a href="#regras">Flags estatísticas</a></li>
             <li><a href="#dados">Dados enviados à IA</a></li>
