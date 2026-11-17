@@ -53,7 +53,8 @@ async function chat(url: string, key: string, model: string, prompt: string, sys
 const toLines = (s: string) =>
   s
     .split("\n")
-    .map((l) => l.replace(/^\s*[-•*]\s*/, "").trim())
+    // O texto é mostrado como texto simples: tirar a marcação de negrito do markdown.
+    .map((l) => l.replace(/^\s*[-•*]\s*/, "").replace(/\*\*(.+?)\*\*|__(.+?)__/g, "$1$2").trim())
     .filter((l) => l.length > 3);
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
