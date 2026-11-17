@@ -304,3 +304,21 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 .fonte { font-size: 12px; line-height: 1.5; color: var(--ink-3); margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .fonte > span:first-child { font-weight: 700; }
 .fonte a { color: var(--ink-2); text-underline-offset: 2px; }
+
+/* Exportação Excel */
+.presets a.export-link { margin-left: auto; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.export-form { display: grid; gap: 20px; }
+.export-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.export-form legend { font-weight: 700; font-size: 16px; margin-bottom: 6px; padding: 0; }
+.export-dates { grid-template-columns: repeat(auto-fit, minmax(150px, 220px)); }
+.export-dates label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.export-dates input { min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; color-scheme: light dark; }
+.export-group { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.check { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 15px; }
+.check:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.check small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.export-actions { display: grid; gap: 8px; justify-items: start; }
+.export-actions button { min-height: 48px; padding: 0 24px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; }
+@media (max-width: 640px) { .presets a.export-link { margin-left: 0; } .export-actions button { width: 100%; } }
+.form-error { color: var(--bad); font-weight: 700; font-size: 14px; }

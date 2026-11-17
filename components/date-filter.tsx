@@ -38,6 +38,7 @@ export function DateFilter({ range, today, path }: { range: Range | null; today:
           <a key={label} href={`${path}?de=${from}&ate=${to}`} aria-current={range?.from === from && range?.to === to ? "true" : undefined}>{label}</a>
         ))}
         {range && <a href={path}>Limpar</a>}
+        <a className="export-link" href={`/exportar${range ? `?de=${range.from}&ate=${range.to}` : ""}`}>Exportar Excel</a>
       </div>
     </section>
   );

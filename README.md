@@ -45,6 +45,16 @@ O modelo (Groq/Hugging Face, as mesmas chaves da síntese) recebe a tabela de in
 - **Matriz por ULS** ordenada por gravidade, com o nível DGS aplicado à procura do SU de cada ULS.
 - **Meses repetidos pela SPMS** (o acumulado de um mês igual ao anterior) ficam "A rever" em vez de gerar falsas variações.
 
+## Exportar para Excel (`/exportar`)
+
+Botão "Exportar Excel" no bloco do período, no boletim, no painel e nas flags. Abre um formulário onde se escolhem as variáveis e o período. A rota `/api/exportar?v=…&de=…&ate=…` gera um `.xlsx` com até três folhas:
+
+- **Diário:** uma linha por dia e uma coluna por variável.
+- **Mensal por ULS:** óbitos SICO e urgências, desde 2024.
+- **Fontes:** fonte e ligação de cada variável, período e data de geração.
+
+Os meses "a rever" (publicação repetida pela SPMS) saem vazios. Se uma fonte falhar, exporta as outras e regista o erro na folha "Fontes".
+
 ## Filtro de datas
 
 As duas páginas aceitam `?de=AAAA-MM-DD&ate=AAAA-MM-DD`, com atalhos para 7, 30 e 90 dias e para a época atual ou anterior. Sem filtro, mostram o estado atual (últimos 7 dias contra a linha de base sazonal). Com filtro, cada indicador compara a média do período com a média do **mesmo período nos 5 anos anteriores** (um único z por período, para não multiplicar falsos alertas em períodos longos). O mapa por ULS usa o último mês publicado até à data final, e as flags de IA analisam esse período. Os avisos do IPMA só aparecem quando o período inclui hoje, porque o IPMA não publica histórico.
