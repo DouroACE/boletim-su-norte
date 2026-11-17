@@ -1,6 +1,6 @@
 // Verificação dos textos de alerta: `node --no-warnings scripts/selfcheck-alertas.mjs`
 import assert from "node:assert/strict";
-import { recomendacoes, gerarAlerta, perigoDeAviso, nivelDeAviso } from "../lib/alertas.ts";
+import { recomendacoes, gerarAlerta, perigoDeAviso, nivelDeAviso, perigosAtivos } from "../lib/alertas.ts";
 
 // Tipos de aviso do IPMA -> perigo
 assert.equal(perigoDeAviso("Tempo quente"), "calor");
@@ -54,5 +54,16 @@ const f = gerarAlerta({ perigo: "incendio", nivel: "maximo", inicio: "", fim: ""
 assert.equal(f.assunto, "Saúde Sazonal: Aviso de Máximo Perigo de Incêndio Rural");
 assert.match(f.email, /dia a indicar/);
 assert.match(f.email, /queimas/);
+
+// Recomendações à população: perigos dos avisos ativos, ou o perigo sazonal do mês
+assert.deepEqual(perigosAtivos([{ tipo: "Tempo quente" }], 7), ["calor"]);
+assert.deepEqual(perigosAtivos([{ tipo: "Tempo quente" }], 1), ["calor", "frio"]);
+assert.deepEqual(perigosAtivos([], 1), ["frio"]);
+assert.deepEqual(perigosAtivos([], 7), ["calor"]);
+assert.deepEqual(perigosAtivos([], 5), []);
+assert.deepEqual(perigosAtivos([{ tipo: "Agitação marítima" }, { tipo: "Tempo frio" }], 1), ["tempestade", "frio"]);
+assert.deepEqual(perigosAtivos([{ tipo: "Nevoeiro" }, { tipo: "Tempo frio" }], 1), ["frio"]);
+assert.deepEqual(perigosAtivos([{ tipo: "Tempo frio" }, { tipo: "Tempo frio" }], 7), ["frio", "calor"]);
+assert.deepEqual(perigosAtivos([{ tipo: "Agitação marítima" }], 11), ["tempestade", "frio"]);
 
 console.log("selfcheck-alertas: ok");

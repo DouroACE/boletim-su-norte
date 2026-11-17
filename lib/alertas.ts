@@ -97,7 +97,7 @@ const TAGS: Record<Perigo, string[]> = {
 };
 const TAGS_BASE = ["#SaúdeSazonal", "#ULSSA", "#USPGondomar", "#Gondomar"];
 
-const TIPO_AVISO: Record<Perigo, string> = {
+export const TIPO_AVISO: Record<Perigo, string> = {
   calor: "tempo quente",
   frio: "tempo frio",
   tempestade: "precipitação, vento ou tempestade",
@@ -138,6 +138,13 @@ export function perigoDeAviso(tipo: string): Perigo {
   if (t.includes("incend")) return "incendio";
   if (/precipit|vento|trovoada|tempest|agitacao|chuva/.test(t)) return "tempestade";
   return "geral";
+}
+
+/** Perigos a recomendar: os dos avisos do IPMA em vigor mais o típico da época (frio nov–mar, calor jun–set), sem repetir; "geral" só se não houver outro. */
+export function perigosAtivos(avisos: { tipo: string }[], mes: number): Perigo[] {
+  const sazonal: Perigo[] = [11, 12, 1, 2, 3].includes(mes) ? ["frio"] : [6, 7, 8, 9].includes(mes) ? ["calor"] : [];
+  const todos = [...new Set([...avisos.map((a) => perigoDeAviso(a.tipo)), ...sazonal])];
+  return todos.length > 1 ? todos.filter((p) => p !== "geral") : todos;
 }
 
 /** Converte o nível do IPMA (yellow/orange/red) no nível usado nos textos. */
