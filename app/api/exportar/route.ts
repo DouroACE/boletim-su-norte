@@ -1,14 +1,16 @@
 // GET /api/exportar?v=episodios&v=obitos&de=AAAA-MM-DD&ate=AAAA-MM-DD → ficheiro .xlsx
 import writeExcelFile from "write-excel-file/node";
-import { fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchMeteoPorto, fetchUlsNorte, type Point, type UlsRow } from "@/lib/sources";
+import { fetchNorte, fetchFriesaPorto, fetchIcaro, fetchObitos, fetchEvmNorte, fetchMeteo, fetchUlsNorte, fetchUlssaMensal, PORTO, GONDOMAR, type Point, type Meteo } from "@/lib/sources";
 import { parseRange } from "@/lib/flags";
 import { addDays } from "@/lib/stats";
 import { buildSheets, parseVars } from "@/lib/export";
+import type { MonthVal } from "@/lib/uls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const REGIAO = process.env.REGIAO_ARS || "ARS Norte";
+const ULSSA = "santo-antonio";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -36,27 +38,40 @@ export async function GET(req: Request) {
       return null;
     }
   };
-  const [norte, friesa, icaro, obitos, meteo, uls] = await Promise.all([
+  const [norte, friesa, icaro, obitos, evm, meteoP, meteoG, uls, ulssa] = await Promise.all([
     get(["episodios", "resp", "triagem", "naoUrgentes", "internamento"], () => fetchNorte(since, REGIAO)),
     get(["friesa", "friesa65"], () => fetchFriesaPorto(since)),
     get(["icaro"], () => fetchIcaro(since)),
     get(["obitos"], () => fetchObitos(since)),
-    get(["tMed", "tMin", "tMax"], () => fetchMeteoPorto()),
-    get(["ulsObitos", "ulsUrg"], () => fetchUlsNorte(today, range.to)),
+    get(["obitosNorte"], () => fetchEvmNorte()),
+    get(["tMed", "tMin", "tMax"], () => fetchMeteo(PORTO.lat, PORTO.lon)),
+    get(["tMedGon", "tMinGon", "tMaxGon"], () => fetchMeteo(GONDOMAR.lat, GONDOMAR.lon)),
+    get(["ulssaUrg", "ulssaObitos"], () => fetchUlsNorte(today, range.to)),
+    get(["ulssaOcup", "ulssaCspPres", "ulssaCspNaoPres"], () => fetchUlssaMensal(today)),
   ]);
-  const met = (k: "tMed" | "tMin" | "tMax"): Point[] => (meteo ?? []).filter((d) => d.date <= today).map((d) => ({ date: d.date, value: d[k] }));
+  // Temperaturas: só até hoje (a previsão não entra na exportação).
+  const met = (src: Meteo[] | null, k: "tMed" | "tMin" | "tMax"): Point[] => (src ?? []).filter((d) => d.date <= today).map((d) => ({ date: d.date, value: d[k] }));
   const daily: Partial<Record<string, Point[]>> = {
     episodios: norte?.episodios, resp: norte?.pctRespiratoria, triagem: norte?.tempoTriagem, naoUrgentes: norte?.naoUrgentes, internamento: norte?.pctInternamento,
-    obitos: obitos ?? undefined, friesa: friesa?.geral, friesa65: friesa?.mais65, icaro: icaro ?? undefined,
-    tMed: met("tMed"), tMin: met("tMin"), tMax: met("tMax"),
+    obitos: obitos ?? undefined, obitosNorte: evm ?? undefined, friesa: friesa?.geral, friesa65: friesa?.mais65, icaro: icaro ?? undefined,
+    tMed: met(meteoP, "tMed"), tMin: met(meteoP, "tMin"), tMax: met(meteoP, "tMax"),
+    tMedGon: met(meteoG, "tMed"), tMinGon: met(meteoG, "tMin"), tMaxGon: met(meteoG, "tMax"),
+  };
+  const row = uls?.find((r) => r.key === ULSSA);
+  const mensal: Partial<Record<string, MonthVal[]>> = {
+    ulssaUrg: row?.urgencias.serie,
+    ulssaObitos: row?.obitos.serie,
+    ulssaOcup: ulssa?.ocupacao,
+    ulssaCspPres: ulssa?.cspPresenciais,
+    ulssaCspNaoPres: ulssa?.cspNaoPresenciais,
   };
   const geradoEm = new Date().toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
-  const sheets = buildSheets(vars, range, daily, (uls ?? []) as UlsRow[], erros, geradoEm);
+  const sheets = buildSheets(vars, range, daily, mensal, erros, geradoEm);
   const buffer = await writeExcelFile(sheets as Parameters<typeof writeExcelFile>[0]).toBuffer();
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="boletim-su-norte_${range.from}_${range.to}.xlsx"`,
+      "Content-Disposition": `attachment; filename="boletim-ulssa_${range.from}_${range.to}.xlsx"`,
       "Cache-Control": "no-store",
     },
   });

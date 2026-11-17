@@ -64,3 +64,110 @@ const rl = regionalDgsLevel(dind);
 assert.equal(rl.level, 2); assert.equal(rl.withData, 1); assert.match(rl.reason, /\+27,0 % → nível 2/);
 assert.equal(regionalDgsLevel(dgsIndicators([])).level, null);
 console.log("selfcheck-risk: ok");
+
+const { parseEvm } = await import("../lib/evm.ts");
+const t = (md) => Date.parse(`2012-${md}T00:00:00Z`);
+const html = `x new Highcharts.Chart({ "title": { "text": "Mortalidade na região de saúde ARS Centro" }, "series": [ { "data": [ [ ${t("01-01")}, 1 ] ], "name": "2026" } ] })
+ new Highcharts.Chart({ "title": { "text": "Mortalidade na região de saúde ARS Norte" }, "series": [ { "data": [ [ ${t("02-28")}, 100 ], [ ${t("02-29")}, 101 ], [ ${t("11-16")}, 104 ] ], "name": "2025" }, { "data": [ [ ${t("11-15")}, 110 ], [ ${t("11-16")}, null ] ], "name": "2026" } ] })`;
+const ev = parseEvm(html, "ARS Norte");
+assert.deepEqual(ev, [{ date: "2025-02-28", value: 100 }, { date: "2025-11-16", value: 104 }, { date: "2026-11-15", value: 110 }]);
+assert.deepEqual(parseEvm("<html>mudou</html>", "ARS Norte"), []);
+console.log("selfcheck-evm: ok");
+
+const { parseCSV, toTable, aggregateByDate, correlate, summarize, asNum } = await import("../lib/analise.ts");
+const addD = (iso, n) => new Date(Date.parse(iso + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+
+// CSV com ; (cabeçalho), aspas, "" escapadas, quebras de linha dentro de campos e BOM
+assert.deepEqual(parseCSV('﻿Nome;Obs;Valor\n"Ana; A";"texto ""x""";"1.234,5"\n"B";"linha\nnova";2\n'), [
+  ["Nome", "Obs", "Valor"], ["Ana; A", 'texto "x"', "1.234,5"], ["B", "linha\nnova", "2"],
+]);
+assert.equal(parseCSV("a,b,c\n1,2,3")[1][2], "3");
+assert.equal(parseCSV("a\tb\n1\t2")[1][0], "1");
+
+// Números PT e dd/mm/aaaa
+assert.equal(asNum("1.234,5"), 1234.5); assert.equal(asNum("1234,5"), 1234.5); assert.equal(asNum("1234.5"), 1234.5); assert.equal(asNum("abc"), null);
+const tb = toTable(parseCSV("Data;Total;Obs\n01/10/2025;\"1.234,5\";x\n02/10/2025;12;y\n03/10/2025;3,5;z\n04/10/2025;7;w\n05/10/2025;8;v"));
+assert.deepEqual(tb.columns.map((c) => c.type), ["date", "number", "category"]);
+assert.equal(tb.nRows, 5);
+assert.equal(tb.columns[0].values[0].toISOString().slice(0, 10), "2025-10-01");
+assert.equal(tb.columns[1].values[0], 1234.5);
+// Excel: número de série só em coluna "data"
+const serial = Date.UTC(2025, 9, 1) / 864e5 + 25569;
+const tsx = toTable([["Data", "Valor"], [serial, 1], [serial + 1, 2], [serial + 2, 3], [serial + 3, 4], [serial + 4, 5]]);
+assert.equal(tsx.columns[0].type, "date"); assert.equal(tsx.columns[0].values[0].toISOString().slice(0, 10), "2025-10-01");
+assert.equal(toTable([["Valor"], [serial], [serial + 1], [serial + 2], [serial + 3], [serial + 4]]).columns[0].type, "number");
+
+// Agregação semanal com início à segunda-feira (2025-10-05 é domingo, 2025-10-06 segunda)
+assert.deepEqual(aggregateByDate(["2025-10-05", "2025-10-06"], [1, 2], "semana", "soma"), [
+  { date: "2025-09-29", value: 1 }, { date: "2025-10-06", value: 2 },
+]);
+assert.deepEqual(aggregateByDate(["2025-10-01", "2025-10-03", "2025-10-03"], [1, 2, 3], "dia", "media"), [
+  { date: "2025-10-01", value: 1 }, { date: "2025-10-03", value: 2.5 },
+]);
+assert.deepEqual(aggregateByDate(["2025-10-01", "2025-11-03"], [5, 1], "mes", "contagem"), [
+  { date: "2025-10-01", value: 1 }, { date: "2025-11-01", value: 1 },
+]);
+
+// Correlação: série e cópia deslocada 3 dias para a frente → melhor lag 3, r ≈ 1
+const base = [];
+for (let i = 0; i < 40; i++) base.push({ date: addD("2025-10-01", i), value: Math.sin(i * 0.7) * 10 + (i % 5) * 3 + i * 0.2 });
+const shifted = base.map((p) => ({ date: addD(p.date, 3), value: p.value }));
+const cr = correlate(base, shifted, 14);
+assert.equal(cr.bestLag.lag, 3); assert.ok(Math.abs(cr.bestLag.r - 1) < 1e-9);
+assert.ok(Math.abs(correlate(base, base).pearson - 1) < 1e-9);
+assert.ok(Math.abs(correlate(base, base).spearman - 1) < 1e-9);
+assert.equal(cr.lags.length, 29);
+assert.ok(Number.isNaN(correlate(base.slice(0, 5), base.slice(0, 5)).pearson)); // n < 8
+
+// Resumo para a IA: sem valores de categoria, séries semanais ≤ 60 pontos
+const big = [["Data", "Doente", "Idade"]];
+for (let i = 0; i < 400; i++) big.push([addD("2024-01-01", i), "Nome Secreto " + i, 20 + (i % 60)]);
+const sum = summarize(toTable(big));
+assert.equal(sum.registos, 400);
+assert.ok(!JSON.stringify(sum).includes("Nome Secreto"));
+assert.ok(sum.semanal.every((s) => s.pontos.length <= 60));
+assert.equal(sum.colunas[1].distintos, 400);
+console.log("selfcheck-analise: ok");
+
+{
+  const { toTable: tt } = await import("../lib/analise.ts");
+  const t = tt([["Ano", "Dia", "Mês2", "Tmax"], [2026, 1, "Janeiro", 12], [2026, 2, "Setembto", 20], [2026, 31, "Junho", 25], [0.59, 3, "Março", 9]]);
+  const d = t.columns[0];
+  assert.equal(d.name, "Data"); assert.equal(d.type, "date");
+  assert.deepEqual(d.values.map((v) => (v ? v.toISOString().slice(0, 10) : null)), ["2026-01-01", "2026-09-02", null, null]);
+  console.log("selfcheck-data-repartida: ok");
+}
+{
+  const { toTable: tt } = await import("../lib/analise.ts");
+  const t = tt([["Ano", "Dia", "Mês", "Alerta Frieza"], [2023, 1, "Janeiro", new Date(Date.UTC(2023, 0, 11))], [2023, 2, "Janeiro", null], [2023, 3, "Janeiro", null]]);
+  assert.equal(t.columns[0].name, "Data");
+  console.log("selfcheck-data-esparsa: ok");
+}
+
+{
+  // Foco ULSSA: níveis DGS, faixa mensal, ocupação e rótulos de ar/pólen/UV (lib/risk.ts)
+  const R = await import("../lib/risk.ts");
+  assert.deepEqual([0, 1, 2, 3, null].map((l) => R.dgsToLevel(l)), ["normal", "atencao", "alerta", "alerta", "sem-dados"]);
+  assert.equal(R.worstOf(["normal", "alerta", "sem-dados"]), "alerta");
+  assert.equal(R.worstOf(["sem-dados"]), "sem-dados");
+  assert.equal(R.worstOf([]), "sem-dados");
+  const f = R.faixaMensal([{ mes: "2025-10", valor: 100 }, { mes: "2026-10", valor: 130 }, { mes: "2026-09", valor: NaN }, { mes: "2025-09", valor: 50 }], [{ mes: "2026-10", valor: 90 }, { mes: "2026-08", valor: 99 }], 12);
+  assert.deepEqual(f.map((x) => [x.mes, x.procura, x.ocupacao, x.nivel]), [
+    ["2025-09", null, null, null], ["2025-10", null, null, null], ["2026-08", null, 2, 2], ["2026-09", null, null, null], ["2026-10", 2, 1, 2],
+  ]);
+  assert.equal(R.faixaMensal([{ mes: "2026-10", valor: 1 }, { mes: "2026-11", valor: 2 }], [], 1).length, 1);
+  assert.deepEqual(R.ateMes([{ mes: "2026-01", v: 1 }, { mes: "2026-03", v: 2 }], "2026-02").map((x) => x.mes), ["2026-01"]);
+  const ui = R.dgsIndicators([], { procura: 30, procuraNota: "p", ocupacao: 96, ocupacaoNota: "o" });
+  assert.equal(ui.find((i) => i.id === "procura").value, 30);
+  assert.equal(ui.find((i) => i.id === "ocupacao").value, 96);
+  assert.equal(R.regionalDgsLevel(ui).level, 2);
+  assert.deepEqual(R.dailyMax(["2026-11-16T00:00", "2026-11-16T01:00", "2026-11-17T00:00"], { pm10: [10, 30, null], ozone: [null, null, 70] }), {
+    "2026-11-16": { pm10: 30 }, "2026-11-17": { ozone: 70 },
+  });
+  assert.equal(R.airLabel("pm10", 15), "Boa"); assert.equal(R.airLabel("pm10", 45), "Moderada");
+  assert.equal(R.airLabel("pm2_5", 30), "Fraca"); assert.equal(R.airLabel("ozone", undefined), "Sem dados");
+  assert.deepEqual(R.polenDia({ grass_pollen: 5, birch_pollen: 30 }), { label: "Moderada", tipo: "bétula" });
+  assert.deepEqual(R.polenDia({}), { label: "Sem dados", tipo: null });
+  assert.deepEqual([R.uvLabel(2), R.uvLabel(7), R.uvLabel(11), R.uvLabel(null)], ["Baixo", "Elevado", "Extremo", "Sem dados"]);
+  console.log("selfcheck-foco-ulssa: ok");
+}

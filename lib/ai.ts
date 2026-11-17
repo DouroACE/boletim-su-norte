@@ -21,7 +21,7 @@ function buildPrompt(flags: Flag[], avisos: Aviso[], patterns: Pattern[]) {
     ? avisos.map((x) => `• ${x.distrito}: ${x.tipo} (${x.nivel}) ${x.inicio.slice(0, 16)}→${x.fim.slice(0, 16)}`).join("\n")
     : "• Sem avisos amarelos, laranja ou vermelhos.";
   const p = patterns.slice(0, 5).map((x) => `• ${x.title}. ${x.detail}`).join("\n");
-  return `Indicadores regionais (ARS Norte, SNS Transparência) e índices de temperatura:\n${f}\n\nAvisos IPMA (distritos do Norte):\n${a}\n\nPadrões nos dados locais do SU (época anterior):\n${p}\n\nRedige a síntese "Padrões e sinais da semana".`;
+  return `Indicadores de vigilância (índices de temperatura e óbitos regionais):\n${f}\n\nAvisos IPMA (distrito do Porto, que inclui Gondomar e Porto Ocidental):\n${a}\n\nPadrões nos dados locais do SU (época anterior):\n${p}\n\nRedige a síntese "Padrões e sinais da semana".`;
 }
 
 async function chat(url: string, key: string, model: string, prompt: string, system = SYSTEM, maxTokens = 500) {
@@ -65,14 +65,14 @@ export function ruleBasedSummary(allFlags: Flag[], avisos: Aviso[]): string[] {
   const watch = flags.filter((f) => f.level === "atencao");
   if (alerts.length) lines.push(`Sinal de alerta em: ${alerts.map((f) => lc(f.label)).join(", ")} (acima de 2 desvios-padrão da linha de base).`);
   if (watch.length) lines.push(`Em atenção: ${watch.map((f) => lc(f.label)).join(", ")} (entre 1 e 2 desvios-padrão).`);
-  if (!alerts.length && !watch.length) lines.push("Todos os indicadores regionais com histórico estão dentro do esperado para esta altura do ano.");
+  if (!alerts.length && !watch.length) lines.push("Todos os indicadores com histórico estão dentro do esperado para esta altura do ano.");
   for (const f of flags.filter((x) => x.changePct != null && Math.abs(x.changePct) >= 10)) {
     lines.push(`${f.label}: ${f.changePct! > 0 ? "subida" : "descida"} de ${Math.abs(f.changePct!).toFixed(0)}% face à semana anterior.`);
   }
   if (avisos.length) {
     const tipos = [...new Set(avisos.map((a) => a.tipo))].join(", ");
-    lines.push(`O IPMA tem avisos ativos nos distritos do Norte (${tipos}).`);
-  } else lines.push("Sem avisos meteorológicos relevantes do IPMA para os distritos do Norte.");
+    lines.push(`O IPMA tem avisos ativos no distrito do Porto (${tipos}).`);
+  } else lines.push("Sem avisos meteorológicos relevantes do IPMA para o distrito do Porto.");
   return lines.slice(0, 6);
 }
 
@@ -154,7 +154,7 @@ export function ruleFlags(indicators: Indicator[]): AiFlag[] {
 export async function aiFlags(indicators: Indicator[], avisos: Aviso[], periodo = "últimos 7 dias"): Promise<AiFlagsResult> {
   const lines = indicators.map((i) => `• [${i.id}] ${i.label} — nível ${i.level}. ${i.detail}`).join("\n");
   const a = avisos.length ? avisos.map((x) => `• ${x.distrito}: ${x.tipo} (${x.nivel})`).join("\n") : "• Sem avisos.";
-  const prompt = `Período analisado: ${periodo}.\n\nIndicadores:\n${lines}\n\nAvisos IPMA (distritos do Norte):\n${a}`;
+  const prompt = `Período analisado: ${periodo}.\n\nIndicadores:\n${lines}\n\nAvisos IPMA (distrito do Porto):\n${a}`;
   try {
     const r = await runLLM(prompt, FLAGS_SYSTEM, 1200);
     if (r) {
@@ -167,4 +167,28 @@ export async function aiFlags(indicators: Indicator[], avisos: Aviso[], periodo 
     return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras", error: (e as Error).message };
   }
   return { flags: ruleFlags(indicators), model: "regras estatísticas", generated: "regras" };
+}
+
+/* ------------------------------------------------------------------ */
+/* Análise de dados carregados — só recebe o resumo agregado           */
+/* ------------------------------------------------------------------ */
+
+const ANALISE_SYSTEM = `És um estatístico a apoiar a análise de dados de uma Unidade de Saúde Pública do Norte de Portugal.
+Recebes APENAS um resumo agregado em JSON: nomes de colunas, tipos, contagens, mín/máx/média, séries semanais e resultados de correlação. Não recebes registos individuais.
+Escreves em português europeu, tom técnico e sóbrio. Descreves relações entre variáveis, sazonalidade, desfasamentos (lags) e anomalias, usando só os números fornecidos.
+Indicas sempre a incerteza: amostra pequena, correlação não implica causalidade, possíveis variáveis de confusão.
+Não inventes valores, causas nem recomendações clínicas. Responde com 5 a 8 linhas curtas, cada uma começada por "- ".`;
+
+/** Análise em texto de um resumo agregado (JSON). Devolve null sem chave ou em caso de falha do fornecedor. */
+export async function aiAnalise(summaryJson: string): Promise<{ text: string[]; model: string } | null> {
+  const prompt = `Resumo agregado dos dados carregados (JSON):\n${summaryJson}\n\nRedige a análise.`;
+  try {
+    const r = await runLLM(prompt, ANALISE_SYSTEM, 900);
+    if (!r) return null;
+    const text = toLines(r.text).slice(0, 8);
+    return text.length ? { text, model: r.model } : null;
+  } catch (e) {
+    console.error("[ai-analise] falhou:", (e as Error).message);
+    return null;
+  }
 }
