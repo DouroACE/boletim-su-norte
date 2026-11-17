@@ -383,6 +383,8 @@ export function Analise() {
       .catch(() => setEstado("IndexedDB indisponível neste browser: os projetos não podem ser guardados."));
 
   useEffect(() => { void recarregar(); }, []);
+  // Link de demonstração: /analise?demo=1 abre com os dados fictícios já carregados.
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("demo") === "1") void carregarDemo(); }, []);
 
   const fontes = useMemo(() => fontesDe(tabs), [tabs]);
   const fx = fontes.find((f) => f.key === xKey) ?? fontes[0];
