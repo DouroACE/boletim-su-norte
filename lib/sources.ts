@@ -248,3 +248,24 @@ export async function safe<T>(meta: Omit<SourceStatus, "ok">, fn: () => Promise<
     return { value: null, status: { ...meta, ok: false, error: (e as Error).message } as SourceStatus };
   }
 }
+
+/** Fontes citadas debaixo de cada gráfico (nome visível + ligação). */
+const SNS_DS = "https://transparencia.sns.gov.pt/explore/dataset/";
+export const FONTES = {
+  gripal: { nome: "SNS Transparência — Vigilância sazonal das urgências (ARS Norte)", url: `${SNS_DS}atividade-sindrome-gripal-csh/` },
+  sazonal: { nome: "SNS Transparência — Monitorização sazonal (internamentos)", url: `${SNS_DS}monitorizacao-sazonal-csh/` },
+  friesa: { nome: "INSA — Índice FRIESA, via SNS Transparência", url: `${SNS_DS}indice-friesa/` },
+  icaro: { nome: "INSA — Índice ÍCARO, via SNS Transparência", url: `${SNS_DS}evolucao-diaria-do-indice-icaro/` },
+  obitos: { nome: "SICO — Certificados de óbito diários, via SNS Transparência", url: `${SNS_DS}evolucao-diaria-de-certificados-de-obito/` },
+  obitosInst: { nome: "SICO — Certificados de óbito por instituição, via SNS Transparência", url: `${SNS_DS}certificados-de-obito-por-instituicao-de-saude/` },
+  urgUls: { nome: "SNS Transparência — Atendimentos por tipo de urgência", url: `${SNS_DS}atendimentos-por-tipo-de-urgencia-hospitalar-link/` },
+  manchester: { nome: "SNS Transparência — Atendimentos por triagem de Manchester", url: `${SNS_DS}atendimentos-em-urgencia-triagem-manchester/` },
+  ipmaAvisos: { nome: "IPMA — Avisos meteorológicos", url: "https://www.ipma.pt/pt/otempo/prev-sam/" },
+  ipmaPrev: { nome: "IPMA — Previsão diária (API aberta)", url: "https://api.ipma.pt/" },
+  meteo: { nome: "Open-Meteo — Temperatura observada e prevista", url: "https://open-meteo.com/" },
+  osm: { nome: "Mapa © OpenStreetMap", url: "https://www.openstreetmap.org/copyright" },
+  tempos: { nome: "SPMS — Portal TEMPOS (coordenadas das ULS)", url: "https://tempos.min-saude.pt/" },
+  dgs: { nome: "DGS / DE-SNS — Plano Nacional de Preparação e Resposta Sazonal em Saúde 2026–2027 (tabela p. 20)" },
+  local: { nome: "Dados locais do SU (ficheiro Excel do serviço)" },
+} satisfies Record<string, { nome: string; url?: string }>;
+export type FonteId = keyof typeof FONTES;

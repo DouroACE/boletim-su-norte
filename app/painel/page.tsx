@@ -5,7 +5,7 @@ import { dgsIndicators, regionalDgsLevel, dgsLevel, DGS_TEXT, type DgsLevel } fr
 import { levelRank, type Level } from "@/lib/stats";
 import { DateFilter } from "@/components/date-filter";
 import { RiskGauge, LevelDonut, BulletRow } from "@/components/risk-viz";
-import { Chip, fmt, fmtDate } from "@/components/ui";
+import { Chip, Fonte, fmt, fmtDate } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Painel de risco · Boletim de Vigilância Sazonal" };
 
@@ -82,6 +82,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
             <p className="partial">
               Parcial: {reg.withData} de {ind.length} indicadores da tabela DGS com dados. Os restantes dependem de dados das ULS, SPMS e ACSS.
             </p>
+            <Fonte ids={["dgs", "gripal"]} />
           </article>
           <article className="card risk-card">
             <h3>ULS por sinal estatístico</h3>
@@ -94,6 +95,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
                 { level: "sem-dados", label: "A rever / sem dados", n: count("sem-dados") },
               ]} />
             ) : <p className="hint">Fonte indisponível neste momento.</p>}
+            <Fonte ids={["obitosInst", "urgUls"]} />
           </article>
         </section>
 
@@ -108,6 +110,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
               {([0, 1, 2, 3] as DgsLevel[]).map((k) => <li key={k}><span className={`dgs-badge dgs-${k}`}>N{k}</span> {DGS_TEXT[k]}</li>)}
             </ul>
             <p className="hint">"Aumento" = média dos últimos 7 dias (ou do período escolhido) face ao esperado para a mesma altura nas épocas anteriores. A referência exata ainda está por confirmar com a DGS.</p>
+            <Fonte ids={["dgs", "gripal"]} />
           </article>
         </section>
 
@@ -145,6 +148,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
               </div>
             ) : <p className="hint">Fonte indisponível neste momento.</p>}
             <p className="hint">"A rever": a SPMS repetiu o valor de um mês na publicação, por isso a comparação fica suspensa até ser corrigida.</p>
+            <Fonte ids={["obitosInst", "urgUls"]} />
           </article>
         </section>
       </main>
