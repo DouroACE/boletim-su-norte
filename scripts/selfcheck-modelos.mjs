@@ -113,7 +113,7 @@ console.log("selfcheck-modelos: ok");
 // ---------- Ficheiro mensal da ULSSA (dados sintéticos) ----------
 import { serieColuna } from "../lib/modelos.ts";
 import {
-  tabelaComCensura, contarCensurados, parseMes, nivelDiarioULSSA, triagemResumo, cspResumo, agregarMensal, FOLHAS_MENSAIS,
+  virusResumo, tabelaComCensura, contarCensurados, parseMes, nivelDiarioULSSA, triagemResumo, cspResumo, agregarMensal, FOLHAS_MENSAIS,
 } from "../lib/modelos.ts";
 
 // Deteção das 5 folhas, incluindo cabeçalhos sem acentos e com espaços a mais
@@ -213,3 +213,27 @@ console.log("agregação: ok");
 console.log("selfcheck-modelos mensal: ok");
 
 function diasEntre(a, b) { const out = []; for (let t = Date.parse(a); t <= Date.parse(b); t += DAY) out.push(iso(t)); return out; }
+
+// ---------- Vírus respiratórios (SPCIRA) ----------
+{
+  const vir = toTable([
+    ["Semana", "Influenza A positivos", "Influenza A negativos", "VSR positivos", "VSR negativos", "SARS-CoV-2 positivos", "SARS-CoV-2 negativos"],
+    ["2025-12-01", 30, 70, 0, 0, 5, 95],
+    ["2025-12-08", 10, 90, 2, 8, 0, 0],
+  ]);
+  assert.equal(detectarModelo(vir), "virus_spcira");
+  assert.equal(detectarModelo(toTable([["Semana", "Influenza A positivos"], ["2025-12-01", 3]])), null);
+  const r = virusResumo(vir);
+  assert.equal(r.semanas.length, 2);
+  assert.equal(r.semanas[0].porVirus.influenza.pct, 30);
+  assert.equal(r.semanas[1].porVirus.vsr.pct, 20);
+  assert.equal(r.semanas[0].porVirus.covid.pct, 5);
+  // 0 testes → positividade nula (não 0 nem NaN)
+  assert.equal(r.semanas[0].porVirus.vsr.testes, 0);
+  assert.equal(r.semanas[0].porVirus.vsr.pct, null);
+  assert.equal(r.semanas[1].porVirus.covid.pct, null);
+  assert.equal(r.totais.influenza.pct, 20);
+  assert.equal(r.totais.influenza.testes, 200);
+  assert.equal(agregarMensal([vir]).virus.nRows, 2);
+}
+console.log("vírus SPCIRA: ok");

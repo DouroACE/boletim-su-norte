@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { RiskGauge } from "@/components/risk-viz";
 import { fmt, fmtDate } from "@/components/ui";
-import { HBarChart } from "@/components/charts";
+import { HBarChart, PctLineChart } from "@/components/charts";
 import { DGS_TEXT } from "@/lib/risk";
 import type { Table } from "@/lib/analise";
 import {
@@ -11,7 +11,7 @@ import {
   LIMIAR_TMAX_EXTREMO, LIMIAR_TMIN_EXTREMO,
   type Modelo, type Nivel, type PredefCorr, type ProcuraSU,
   CORES, METRICAS_CSP, cspResumo, contarCensurados, fmtPt, kpisULSSA, nivelDiarioULSSA, totaisPorCodigo, triagemResumo,
-  type Cor, type MensalULSSA,
+  type Cor, type MensalULSSA, VIRUS, virusResumo,
 } from "@/lib/modelos";
 import s from "@/app/analise/analise.module.css";
 
@@ -227,6 +227,12 @@ export function PainelMensal({ m }: { m: MensalULSSA }) {
   const porData = new Map(dias.map((d) => [d.data, d]));
   const ultimoMes = csp?.linhas.at(-1)?.mes;
   const cspMes = csp?.linhas.filter((l) => l.mes === ultimoMes) ?? [];
+  const virus = useMemo(() => (m.virus ? virusResumo(m.virus) : null), [m.virus]);
+  const serieVirus = useMemo(
+    () => virus?.semanas.map((w) => ({ semana: w.semana, ...Object.fromEntries(VIRUS.map((v) => [v.chave, w.porVirus[v.chave].pct])) })) ?? [],
+    [virus],
+  );
+  const ultimas4 = virus?.semanas.slice(-4) ?? [];
   const codigos = m.sud ? totaisPorCodigo(m.sud).map((x) => ({ codigo: x.codigo, total: x.total })) : [];
   const codigosIcpc = m.icpc ? totaisPorCodigo(m.icpc).map((x) => ({ codigo: x.codigo, total: x.total })) : [];
 
@@ -297,6 +303,42 @@ export function PainelMensal({ m }: { m: MensalULSSA }) {
         <div className={s.bloco}>
           <h3 className="sub-h">Diagnósticos no período (ICD-10)</h3>
           <HBarChart data={codigos} x="total" y="codigo" label="Total por código ICD-10 no período" unit="" />
+        </div>
+      )}
+
+      {virus && virus.semanas.length > 0 && (
+        <div className={s.bloco}>
+          <h3 className="sub-h">Vírus respiratórios (SPCIRA)</h3>
+          <PctLineChart
+            data={serieVirus}
+            lines={VIRUS.map((v, i) => ({ key: v.chave, name: `${v.rotulo} (positividade)`, color: ["var(--c1)", "var(--c3)", "var(--c4)"][i] }))}
+            title="Positividade semanal de Influenza A, VSR e SARS-CoV-2 (SPCIRA), em percentagem"
+          />
+          <div className="table-wrap">
+            <table className="col-table">
+              <caption className="sr-only">Últimas 4 semanas: positivos, testes e positividade por vírus</caption>
+              <thead>
+                <tr><th scope="col">Semana</th>{VIRUS.map((v) => <th scope="col" key={v.chave}>{v.rotulo}</th>)}</tr>
+              </thead>
+              <tbody>
+                {ultimas4.map((w) => (
+                  <tr key={w.semana}>
+                    <th scope="row">{dd(w.semana)}</th>
+                    {VIRUS.map((v) => {
+                      const c = w.porVirus[v.chave];
+                      return (
+                        <td key={v.chave}>
+                          {c.positivos ?? "–"} / {c.testes ?? "–"} · {c.pct == null ? "–" : `${fmtPt(c.pct)} %`}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint">Positividade = positivos / (positivos + negativos). Semana a partir de segunda-feira.</p>
+          <p className="fonte"><span>Fonte:</span> SPCIRA — Serviço de Microbiologia da ULSSA (ficheiro da equipa)</p>
         </div>
       )}
 

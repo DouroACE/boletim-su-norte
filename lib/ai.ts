@@ -192,3 +192,25 @@ export async function aiAnalise(summaryJson: string): Promise<{ text: string[]; 
     return null;
   }
 }
+
+const PADROES_SYSTEM = `És um estatístico a apoiar a vigilância de saúde sazonal numa Unidade de Saúde Pública do Norte de Portugal.
+Recebes APENAS um resumo agregado em JSON por série (n, média, mínimo e máximo com datas, sinal da tendência, 3 picos, variação face ao período anterior) e a matriz de correlação de Pearson entre séries. Não recebes registos individuais.
+Escreves em português europeu, tom técnico e sóbrio, em tópicos curtos começados por "- ".
+Cobre: tendências, picos e sazonalidade; relações entre variáveis, com cautela (correlação não implica causalidade e pode haver variáveis de confusão);
+possíveis causas no contexto de saúde sazonal (frio, calor, vírus respiratórios, procura do SU), apresentadas como hipóteses a verificar;
+e o que monitorizar a seguir.
+Usa só os números fornecidos; não inventes valores, datas nem causas. Se a amostra for pequena, diz que a leitura é incerta. Não dês recomendações clínicas. Responde com 5 a 8 tópicos.`;
+
+/** Comentário em texto sobre padrões de séries escolhidas (resumo agregado, nunca registos). Null sem chave ou em falha. */
+export async function aiPadroes(resumoJson: string): Promise<{ text: string[]; model: string } | null> {
+  const prompt = `Resumo agregado das séries escolhidas (JSON):\n${resumoJson}\n\nRedige o comentário sobre os padrões.`;
+  try {
+    const r = await runLLM(prompt, PADROES_SYSTEM, 900);
+    if (!r) return null;
+    const text = toLines(r.text).slice(0, 8);
+    return text.length ? { text, model: r.model } : null;
+  } catch (e) {
+    console.error("[ai-padroes] falhou:", (e as Error).message);
+    return null;
+  }
+}

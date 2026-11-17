@@ -10,7 +10,9 @@ assert.equal(ulsOf("Trofa Saúde Braga"), undefined);
 assert.equal(ulsOf("Unidade Local de Saúde do Nordeste, E.P.E. - UCSP Braga")?.key, "nordeste");
 
 const d = decumulate([{ mes: "2025-12", v: 120 }, { mes: "2026-02", v: 25 }, { mes: "2026-01", v: 10 }], ["v"]);
-assert.deepEqual(d.map((r) => r.v), [120, 10, 15]);
+// Dezembro sem os meses anteriores é o acumulado do ano: fica sem valor; um mês em falta também.
+assert.deepEqual(d.map((r) => r.v), [NaN, 10, 15]);
+assert.ok(Number.isNaN(decumulate([{ mes: "2026-03", v: 30 }, { mes: "2026-05", v: 50 }], ["v"])[1].v));
 
 // Tâmega e Sousa 2025: julho repetiu o acumulado de junho → julho e agosto ficam "a rever"
 const tam = decumulate([{ mes: "2025-06", v: 106 }, { mes: "2025-07", v: 106 }, { mes: "2025-08", v: 143 }, { mes: "2025-09", v: 160 }], ["v"]);

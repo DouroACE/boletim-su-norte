@@ -105,7 +105,8 @@ export async function fetchObitos(sinceISO: string): Promise<Point[]> {
 /* Atendimentos mensais por triagem de Manchester numa instituição (ex.: ULS Santo António) */
 export type Manchester = { mes: string; vermelha: number; laranja: number; amarela: number; verde: number; azul: number; branca: number; semTriagem: number };
 export async function fetchManchester(instituicao: string, sinceMonth: string): Promise<Manchester[]> {
-  const q = new URLSearchParams({ where: `instituicao="${instituicao}" AND tempo >= "${sinceMonth}"`, order_by: "tempo" });
+  // Pede desde janeiro: o acumulado do primeiro mês só se converte em mensal com os meses anteriores do mesmo ano.
+  const q = new URLSearchParams({ where: `instituicao="${instituicao}" AND tempo >= "${sinceMonth.slice(0, 4)}-01"`, order_by: "tempo" });
   type R = Record<string, number | string>;
   const rows = await getJSON<R[]>(`${SNS}/atendimentos-em-urgencia-triagem-manchester/exports/json?${q}`);
   const n = (r: R, k: string) => Number(r[`no_de_atendimentos_em_urgencia_su_triagem_manchester_${k}`] ?? 0);
@@ -119,7 +120,7 @@ export async function fetchManchester(instituicao: string, sinceMonth: string): 
     azul: n(r, "azul"),
     branca: n(r, "branca"),
     semTriagem: Number(r.no_de_atendimentos_em_sem_triagem_manchester ?? 0),
-  })), ["vermelha", "laranja", "amarela", "verde", "azul", "branca", "semTriagem"]);
+  })), ["vermelha", "laranja", "amarela", "verde", "azul", "branca", "semTriagem"]).filter((r) => r.mes >= sinceMonth);
 }
 
 /* ------------------------------------------------------------------ */

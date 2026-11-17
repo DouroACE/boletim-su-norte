@@ -11,6 +11,7 @@ import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, Fonte, fmt, fmtDate } from "@/c
 import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, MonthlyBars, type SeasonRow, type MeteoRow } from "@/components/charts";
 import { DGS_TEXT, dgsLevel, dgsToLevel, worstOf, uvLabel, airLabel, polenDia, ateMes, LIMIAR_OCUPACAO, LIMIAR_PROCURA, type DgsLevel, type AirDay } from "@/lib/risk";
 import { compareHomologous } from "@/lib/uls";
+import { Imprimir, RodapeImpressao } from "@/components/imprimir";
 import { perigosAtivos, recomendacoes, TIPO_AVISO } from "@/lib/alertas";
 
 export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinha com dados novos
@@ -170,9 +171,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             <span>Atualizado a <strong>{now.toLocaleString("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "long", timeStyle: "short" })}</strong></span>
             <span>Último mês publicado da ULSSA <strong>{mesExtenso(urg?.mes ?? ocup?.mes)}</strong></span>
             <span>Nova recolha automática a cada 3 horas</span>
+            <Imprimir />
           </div>
         </div>
       </header>
+      <RodapeImpressao />
 
       <nav className="toc" aria-label="Secções do site">
         <div className="wrap">
