@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { SeriesTabela, pedirPadroes, type IA, type TipoGrafico } from "@/components/analise";
 import { lerStore } from "@/components/relatorios";
+import { lerHistorico } from "@/components/historico";
+import { tabelaHistorico, type Historico } from "@/lib/historico";
 import { juntarTabelas, tabelaDePontos, type AggFn, type Period, type Serie } from "@/lib/analise";
 import { normalizarRegisto, type RegistoSemanal } from "@/lib/relatorios";
 import { tabelaDiaria, tabelaSemanal } from "@/lib/semanal";
@@ -38,6 +40,7 @@ function gravarEstudos(e: Estudo[]): boolean {
 
 export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   const [registos, setRegistos] = useState<RegistoSemanal[]>([]);
+  const [historico, setHistorico] = useState<Historico>({});
   const [demo, setDemo] = useState(false);
   const [estado, setEstado] = useState("");
   const [periodo, setPeriodo] = useState<Period>("semana");
@@ -53,17 +56,19 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
     const l = lerStore();
     setRegistos(l.ok ? Object.values(l.dados) : []);
     setEstudos(lerEstudos());
+    setHistorico(lerHistorico().metricas);
   }, []);
 
-  // Ordem fixa: semanas, indicadores diários, séries públicas. As variáveis dos estudos guardam-se pelo nome.
+  // Ordem fixa: semanas, indicadores diários, séries públicas e histórico importado no Boletim. Os estudos guardam as variáveis pelo nome.
   const table = useMemo(
     () =>
       juntarTabelas([
         { prefixo: "Semana", table: tabelaSemanal(registos) },
         { prefixo: "Diário", table: tabelaDiaria(registos) },
         ...publicos.filter((p) => p.pts?.length).map((p) => ({ prefixo: "Público", table: tabelaDePontos(p.nome, p.pts ?? []) })),
+        { prefixo: "Histórico", table: tabelaHistorico(historico) },
       ]),
-    [registos, publicos],
+    [registos, publicos, historico],
   );
   const nomes = table.columns.map((c) => c.name);
 

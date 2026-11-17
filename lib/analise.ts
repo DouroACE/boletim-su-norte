@@ -95,8 +95,9 @@ export function retype(col: Column, type: ColType): Column {
   return { name: col.name, type, values };
 }
 
-/** Primeira linha não vazia é o cabeçalho. Tipo: data se ≥80% datas, número se ≥80% números, senão categoria. */
-export function toTable(rows: (string | number | Date | null)[][]): Table {
+/** Primeira linha não vazia é o cabeçalho. Tipo: data se ≥80% datas, número se ≥80% números, senão categoria.
+ *  `anoPorOmissao`: ano para folhas com Dia e Mês mas sem coluna Ano (ex.: «Original 2024»). */
+export function toTable(rows: (string | number | Date | null)[][], anoPorOmissao?: number): Table {
   const filas = rows.filter((r) => r.some((c) => !blank(c)));
   if (!filas.length) return { columns: [], nRows: 0 };
   const [cab, ...dados] = filas;
@@ -110,7 +111,7 @@ export function toTable(rows: (string | number | Date | null)[][]): Table {
       share((v) => asDate(v, name) != null) >= 0.8 ? "date" : share((v) => asNum(v) != null) >= 0.8 ? "number" : "category";
     return retype({ name, type, values: raw }, type);
   });
-  return { columns: withSplitDate(columns), nRows: dados.length };
+  return { columns: withSplitDate(columns, anoPorOmissao), nRows: dados.length };
 }
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -118,15 +119,15 @@ const sem = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").to
 
 /** Folhas como "Vigilância Sazonal" guardam a data repartida em Ano / Mês (nome ou número) / Dia.
  *  Sem coluna de data, junta-as numa coluna "Data" (datas impossíveis, ex. 31 de junho, ficam vazias). */
-function withSplitDate(columns: Column[]): Column[] {
+function withSplitDate(columns: Column[], anoPorOmissao?: number): Column[] {
   // Uma coluna de data esparsa (ex. "Alerta Frieza", só nos dias de alerta) não serve de eixo temporal.
   const n = columns[0]?.values.length ?? 0;
   if (columns.some((c) => c.type === "date" && c.values.filter(Boolean).length >= n / 2)) return columns;
   const find = (re: RegExp) => columns.find((c) => re.test(sem(c.name)));
   const ano = find(/^ano$/), dia = find(/^dia$/), mes = find(/^mes\d*$/);
-  if (!ano || !dia || !mes) return columns;
-  const values: Cell[] = ano.values.map((_, i) => {
-    const y = asNum(ano.values[i]), d = asNum(dia.values[i]), mv = mes.values[i];
+  if (!dia || !mes || (!ano && !anoPorOmissao)) return columns;
+  const values: Cell[] = dia.values.map((_, i) => {
+    const y = ano ? asNum(ano.values[i]) : anoPorOmissao, d = asNum(dia.values[i]), mv = mes.values[i];
     const m = typeof mv === "number" ? mv : MESES.indexOf(sem(String(mv ?? "")).slice(0, 3)) + 1;
     return y && d && m >= 1 && m <= 12 && Number.isInteger(y) && y > 1900 ? utcDay(y, m, d) : null;
   });

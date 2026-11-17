@@ -361,6 +361,11 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 .btn.ghost { background: var(--surface); color: var(--accent); border: 1px solid var(--accent); }
 .btn.danger { background: var(--bad); color: #fff; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Ligações e etiquetas de ficheiro com aspeto de botão: texto centrado, sem sublinhado */
+a.btn, label.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+a.btn.ghost:hover { color: var(--accent-hover); border-color: var(--accent-hover); }
+label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card .row-actions { margin-top: 12px; }
 .opts { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .opts .field { flex: 1 1 170px; }
 .field { display: grid; min-width: 0; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
@@ -422,3 +427,10 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--i
 .banner-ficticio { margin: 8px 0; padding: 10px 12px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); border: 1px solid currentColor; font-weight: 700; }
 .lista-estudos { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .lista-estudos li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
+
+/* Importar dados de boletins passados (Boletim) */
+.historico-folha { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); min-width: 0; }
+.historico-titulo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 44px; overflow-wrap: anywhere; }
+.historico-titulo input { width: 20px; height: 20px; accent-color: var(--accent); }
+.historico-folha select { min-height: 40px; max-width: 100%; }
+.historico-folha .uls-table td, .historico-folha .uls-table th { white-space: normal; }

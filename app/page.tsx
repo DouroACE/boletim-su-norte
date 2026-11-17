@@ -14,6 +14,7 @@ import { compareHomologous } from "@/lib/uls";
 import { Imprimir, RodapeImpressao } from "@/components/imprimir";
 import { Navegacao } from "@/components/nav";
 import { AlertasGerador } from "@/components/alertas";
+import { ImportarHistorico } from "@/components/historico";
 import { perigosAtivos, recomendacoes, TIPO_AVISO } from "@/lib/alertas";
 
 export const revalidate = 10800; // 3 h — ISR: a página reconstrói-se sozinha com dados novos
@@ -588,6 +589,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
             </div>
           </details>
         </section>
+
+        {/* HISTÓRICO (equipa) */}
+        <details className="card dobra" id="historico">
+          <summary><h2 id="h-historico">Importar dados de boletins passados</h2></summary>
+          <ImportarHistorico />
+        </details>
 
         {/* ALERTAS (equipa) */}
         <details className="card dobra" id="alertas">

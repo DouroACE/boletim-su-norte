@@ -24,7 +24,7 @@ Os dados da equipa não entram no repositório: o Excel semanal é lido só no b
 
 ## Páginas
 
-- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsado, o gerador de textos de alerta da equipa. O botão «Exportar Excel» descarrega todas as variáveis do período (`/api/exportar`).
+- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsados, a importação de boletins passados (cada coluna dos Excel antigos, como «MortDiaria no ACES» ou «ÍCARO >65 anos», passa a uma métrica padrão com o mesmo nome em todos os anos; `lib/historico.ts`; fica no browser, aparece no Workspace e descarrega-se em CSV) e o gerador de textos de alerta da equipa. O botão «Exportar Excel» descarrega todas as variáveis do período (`/api/exportar`).
 - **Relatórios** (`/relatorios`): a USP larga o Excel da semana ([modelo](/api/modelo-semanal): folhas Hospital, CSP, USP, Laboratório e Indicadores diários) e sai a tabela de Monitorização Semanal para a DE-SNS e o texto do e-mail, prontos a copiar. Pode rever cada semana e exportar cópias `.json`.
 - **Workspace** (`/workspace`): estudos com as semanas carregadas (matriz, laboratório e indicadores diários) e séries públicas (ÍCARO, FRIESA, óbitos, urgências da Região Norte): até 6 variáveis no mesmo gráfico, matriz de correlação, comentário da IA (só agregados) e estudos guardados. «Experimentar com semanas fictícias» usa `public/demo/semanas_FICTICIO.json` (`npm run demo`).
 
@@ -71,6 +71,7 @@ npm run dev
 npx tsc --noEmit
 node scripts/selfcheck-uls.mjs        # lógica por ULS, DGS, faixa mensal, ar/pólen/UV e flags de IA
 node scripts/selfcheck-semanal.mjs    # modelo semanal → Excel → leitura, e tabelas do Workspace
+node scripts/selfcheck-historico.mjs  # padronização das métricas de boletins passados
 npm run build
 ```
 
