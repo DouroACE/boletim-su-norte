@@ -1,5 +1,4 @@
-// Análise dos dados locais do SU (ficheiro Excel convertido em data/su-local.json).
-import raw from "@/data/su-local.json";
+// Análise dos dados do SU carregados pela equipa no browser (Excel de afluência ao SU).
 import { mean, sd, pearson, rolling, addDays } from "./stats";
 
 export type LocalRec = {
@@ -13,10 +12,6 @@ export type LocalRec = {
   tMed: number; tMin: number; tMax: number; precip: number; icaro: number;
 };
 
-const compact = raw as { source: string; cols: string[]; rows: (string | number | null)[][] };
-const records = compact.rows.map((row) => Object.fromEntries(compact.cols.map((c, i) => [c, row[i]])) as unknown as LocalRec);
-export const local = { source: compact.source, records };
-const R = local.records;
 
 const DOW = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const dow = (iso: string) => new Date(iso + "T12:00:00Z").getUTCDay();
@@ -25,7 +20,7 @@ const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 
 export type Pattern = { id: string; level: "info" | "atencao" | "alerta"; title: string; detail: string };
 
-export function analyseLocal() {
+export function analyseLocal(R: LocalRec[]) {
   if (!R.length) return null;
   const first = R[0].date;
   const last = R.at(-1)!.date;
@@ -120,6 +115,8 @@ export function analyseLocal() {
   });
   const best = lags.reduce((a, b) => (Math.abs(b.r) > Math.abs(a.r) ? b : a));
 
+  // Menos de uma semana com 5 dias: sem análise semanal.
+  if (!weekly.length) return null;
   const peakWeek = weekly.reduce((a, b) => (b.total > a.total ? b : a));
   const peakResp = weekly.reduce((a, b) => (b.respiratorias > a.respiratorias ? b : a));
   const lowWeek = weekly.reduce((a, b) => (b.total < a.total ? b : a));

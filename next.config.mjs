@@ -6,7 +6,7 @@ export default {
   async redirects() {
     return [
       { source: "/painel", destination: "/", permanent: true },
-      { source: "/alertas", destination: "/#alertas", permanent: true },
+      { source: "/alertas", destination: "/comunicacao", permanent: true },
       { source: "/flags-ia", destination: "/", permanent: true },
       { source: "/exportar", destination: "/", permanent: true },
       { source: "/analise", destination: "/workspace", permanent: true },

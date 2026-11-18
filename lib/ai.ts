@@ -4,6 +4,7 @@
 import type { Flag, Level } from "./stats";
 import type { Pattern } from "./local";
 import type { Aviso } from "./sources";
+import type { Indicator } from "./su-semana";
 
 export type AiSummary = { text: string[]; model: string; generated: "ia" | "regras" };
 
@@ -21,7 +22,8 @@ function buildPrompt(flags: Flag[], avisos: Aviso[], patterns: Pattern[]) {
     ? avisos.map((x) => `• ${x.distrito}: ${x.tipo} (${x.nivel}) ${x.inicio.slice(0, 16)}→${x.fim.slice(0, 16)}`).join("\n")
     : "• Sem avisos amarelos, laranja ou vermelhos.";
   const p = patterns.slice(0, 5).map((x) => `• ${x.title}. ${x.detail}`).join("\n");
-  return `Indicadores de vigilância (índices de temperatura e óbitos regionais):\n${f}\n\nAvisos IPMA (distrito do Porto, que inclui Gondomar e Porto Ocidental):\n${a}\n\nPadrões nos dados locais do SU (época anterior):\n${p}\n\nRedige a síntese "Padrões e sinais da semana".`;
+  const su = p ? `\n\nPadrões nos dados do SU:\n${p}` : "";
+  return `Indicadores de vigilância (índices de temperatura e óbitos regionais):\n${f}\n\nAvisos IPMA (distrito do Porto, que inclui Gondomar e Porto Ocidental):\n${a}${su}\n\nRedige a síntese "Padrões e sinais da semana".`;
 }
 
 async function chat(url: string, key: string, model: string, prompt: string, system = SYSTEM, maxTokens = 500) {
@@ -103,6 +105,91 @@ export async function aiSummary(flags: Flag[], avisos: Aviso[], patterns: Patter
 }
 
 /* ------------------------------------------------------------------ */
+/* Flags de IA da urgência — o modelo propõe sinais; o código valida e fixa o nível */
+/* ------------------------------------------------------------------ */
+
+export type AiFlag = { indicadores: string[]; level: Level | "info"; titulo: string; evidencia: string; investigar: string };
+export type AiFlagsResult = { flags: AiFlag[]; sintese: string[]; model: string; generated: "ia" | "regras"; error?: string };
+
+const FLAGS_SYSTEM = `És um epidemiologista de uma Unidade de Saúde Pública do Norte de Portugal a rever a urgência (SU) da ULS Santo António.
+Recebes indicadores da última semana, cada um com um id entre parênteses retos, comparados com as 8 semanas anteriores
+(nível estatístico já calculado, média, desvio-padrão e z).
+Propõe até 6 "flags": sinais que merecem atenção, incluindo padrões que só se veem cruzando indicadores
+(ex.: mais infeções respiratórias com mais idosos e mais internamento; frio seguido de mais procura).
+Regras: usa só os números fornecidos; não inventes valores nem causas; cada flag cita os ids exatos em que se baseia;
+escreve em português europeu, frases curtas, sem markdown. Junta uma síntese da semana em 3 a 5 frases para o boletim.
+Responde APENAS com JSON:
+{"sintese":["frase 1","frase 2"],"flags":[{"indicadores":["id1","id2"],"titulo":"...","evidencia":"números que sustentam a flag","investigar":"o que a equipa deve verificar"}]}`;
+
+const clip = (v: unknown, n: number) => String(v ?? "").replace(/\*\*/g, "").trim().slice(0, n);
+const RANK: Record<Level, number> = { "sem-dados": -1, normal: 0, atencao: 1, alerta: 2 };
+
+/** Valida a resposta do modelo: só aceita flags que citam ids conhecidos; o nível é o pior das regras citadas. */
+export function parseAiFlags(text: string, indicators: Indicator[]): AiFlag[] {
+  const byId = new Map(indicators.map((i) => [i.id, i]));
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  const list = (raw as { flags?: unknown }).flags;
+  if (!Array.isArray(list)) return [];
+  const out: AiFlag[] = [];
+  for (const f of list.slice(0, 6)) {
+    const ids = Array.isArray(f?.indicadores) ? [...new Set<string>(f.indicadores.map((x: unknown) => String(x).replace(/[[\]\s]/g, "")))].filter((id) => byId.has(id)) : [];
+    const titulo = clip(f?.titulo, 140);
+    if (!ids.length || !titulo) continue;
+    const worst = ids.map((id) => byId.get(id)!.level).reduce((w, l) => (RANK[l] > RANK[w] ? l : w), "sem-dados" as Level);
+    out.push({ indicadores: ids, level: RANK[worst] >= 1 ? worst : "info", titulo, evidencia: clip(f?.evidencia, 600), investigar: clip(f?.investigar, 400) });
+  }
+  return out;
+}
+
+/** Síntese da resposta do modelo (lista de frases, sem markdown), ou []. */
+export function parseSintese(text: string): string[] {
+  try {
+    const raw = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { sintese?: unknown };
+    return Array.isArray(raw.sintese) ? raw.sintese.map((x) => clip(x, 400)).filter((x) => x.length > 3).slice(0, 6) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Sem IA: síntese a partir dos indicadores (os que estão em Atenção ou Alerta, ou a nota de semana estável). */
+function sinteseRegras(indicators: Indicator[]): string[] {
+  const sinais = indicators.filter((i) => i.level === "alerta" || i.level === "atencao");
+  return [sinais.length ? `${sinais.length} indicador(es) do SU acima do esperado face às 8 semanas anteriores: ${sinais.map((i) => i.label.toLowerCase()).join("; ")}.` : "Nenhum indicador do SU acima do esperado face às semanas anteriores."];
+}
+
+/** Sem IA: uma flag por indicador em Atenção ou Alerta, do pior para o melhor. */
+export function ruleFlags(indicators: Indicator[]): AiFlag[] {
+  return indicators
+    .filter((i) => i.level === "alerta" || i.level === "atencao")
+    .sort((a, b) => RANK[b.level] - RANK[a.level])
+    .map((i) => ({ indicadores: [i.id], level: i.level, titulo: i.label, evidencia: i.detail, investigar: "" }));
+}
+
+/** Flags da semana do SU: a IA propõe a partir dos indicadores agregados; sem chave ou resposta inválida, ficam as regras. */
+export async function aiFlagsSU(indicators: Indicator[], semana: string): Promise<AiFlagsResult> {
+  const lines = indicators.map((i) => `• [${i.id}] ${i.label} — nível ${i.level}. ${i.detail}`).join("\n");
+  try {
+    const r = await runLLM(`Semana do SU que começa a ${semana}.\n\nIndicadores:\n${lines}`, FLAGS_SYSTEM, 1200);
+    if (r) {
+      const flags = parseAiFlags(r.text, indicators);
+      const sintese = parseSintese(r.text);
+      if (flags.length || sintese.length) return { flags, sintese: sintese.length ? sintese : sinteseRegras(indicators), model: r.model, generated: "ia" };
+      return { flags: ruleFlags(indicators), sintese: sinteseRegras(indicators), model: "regras estatísticas", generated: "regras", error: "A resposta da IA não trouxe flags válidas." };
+    }
+  } catch (e) {
+    console.error("[ai-flags-su] falhou, a usar regras:", (e as Error).message);
+    return { flags: ruleFlags(indicators), sintese: sinteseRegras(indicators), model: "regras estatísticas", generated: "regras", error: (e as Error).message };
+  }
+  return { flags: ruleFlags(indicators), sintese: sinteseRegras(indicators), model: "regras estatísticas", generated: "regras" };
+}
+
+/* ------------------------------------------------------------------ */
 /* Análise de dados carregados — só recebe o resumo agregado           */
 /* ------------------------------------------------------------------ */
 
@@ -146,4 +233,66 @@ export async function aiPadroes(resumoJson: string): Promise<{ text: string[]; m
     console.error("[ai-padroes] falhou:", (e as Error).message);
     return null;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Comunicados: população, interno e estratégias de controlo           */
+/* ------------------------------------------------------------------ */
+
+export type Publico = "populacao" | "interno" | "estrategias";
+
+const COMUNICADO_BASE = `Trabalhas na Unidade de Saúde Pública da ULS Santo António (Gondomar e Porto Ocidental), na Equipa Local de Saúde Sazonal.
+Recebes um contexto com flags, indicadores e notas já validadas pela equipa (só números agregados).
+Regras: usa só a informação do contexto; não inventes números, datas, serviços nem contactos além da Linha SNS 24 (808 24 24 24) e do 112;
+português europeu, sem markdown, sem asteriscos; parágrafos curtos, um por linha.`;
+
+const COMUNICADO_SYSTEM: Record<Publico, string> = {
+  populacao: `${COMUNICADO_BASE}
+Escreve um comunicado à população: título numa linha, depois 3 a 5 parágrafos em linguagem simples (nível de leitura básico),
+o que está a acontecer, quem está mais em risco, o que fazer (medidas de proteção e quando contactar a Linha SNS 24 ou o 112). Tom calmo e claro.`,
+  interno: `${COMUNICADO_BASE}
+Escreve um comunicado interno para os profissionais e parceiros da ULS (hospital, CSP, USP, autarquias): assunto numa linha,
+depois a situação com os números do contexto, o nível de risco, o que se pede a cada equipa e o próximo ponto de situação. Tom técnico e direto.`,
+  estrategias: `${COMUNICADO_BASE}
+Propõe estratégias de controlo e de execução para reduzir danos, em linhas começadas por um verbo: para cada uma,
+o objetivo, quem executa (hospital, CSP, USP, comunicação, parceiros), o prazo (imediato, esta semana, próximas semanas) e o indicador do contexto que a justifica.
+No fim, uma linha com o que monitorizar na semana seguinte. Máximo 8 estratégias.`,
+};
+
+/** Rascunho de comunicado a partir de um contexto agregado (texto). A equipa revê sempre antes de usar. */
+export async function aiComunicado(publico: Publico, contexto: string): Promise<{ text: string[]; model: string } | null> {
+  try {
+    const r = await runLLM(`Contexto:\n${contexto}\n\nEscreve o texto pedido.`, COMUNICADO_SYSTEM[publico], 1200);
+    if (!r) return null;
+    const text = toLines(r.text).slice(0, 20);
+    return text.length ? { text, model: r.model } : null;
+  } catch (e) {
+    console.error("[ai-comunicado] falhou:", (e as Error).message);
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Validação dos pedidos do browser (só agregados, tamanhos limitados) */
+/* ------------------------------------------------------------------ */
+
+const NIVEIS: Level[] = ["normal", "atencao", "alerta", "sem-dados"];
+
+/** Pedido de flags do SU: semana AAAA-MM-DD e até 12 indicadores {id su:…, label, level, detail}. Devolve erro ou null. */
+export function validarPedidoFlags(b: unknown): string | null {
+  const o = b as { semana?: unknown; indicadores?: unknown };
+  if (typeof o.semana !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.semana)) return "Semana inválida.";
+  if (!Array.isArray(o.indicadores) || !o.indicadores.length || o.indicadores.length > 12) return "Indicadores em falta ou demasiados.";
+  const ok = o.indicadores.every((i: { id?: unknown; label?: unknown; level?: unknown; detail?: unknown }) =>
+    typeof i?.id === "string" && /^su:[a-z0-9]+$/.test(i.id) && typeof i.label === "string" && i.label.length <= 120 &&
+    typeof i.detail === "string" && i.detail.length <= 400 && NIVEIS.includes(i.level as Level));
+  return ok ? null : "Indicador com formato inválido.";
+}
+
+/** Pedido de comunicado: público conhecido e contexto em texto (até 8000 caracteres). Devolve erro ou null. */
+export function validarPedidoComunicado(b: unknown): string | null {
+  const o = b as { publico?: unknown; contexto?: unknown };
+  if (o.publico !== "populacao" && o.publico !== "interno" && o.publico !== "estrategias") return "Tipo de comunicado inválido.";
+  if (typeof o.contexto !== "string" || o.contexto.trim().length < 20 || o.contexto.length > 8000) return "Contexto em falta ou demasiado longo.";
+  return null;
 }

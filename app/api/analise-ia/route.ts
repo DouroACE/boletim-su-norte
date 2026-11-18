@@ -1,6 +1,8 @@
 // POST /api/analise-ia — recebe só o resumo agregado (sem registos) e devolve a análise da IA.
-// Dois pedidos: análise geral (corpo sem "tipo") e comentário de padrões (tipo: "padroes").
-import { aiAnalise, aiPadroes } from "@/lib/ai";
+// Pedidos: análise geral (sem "tipo"), padrões de um estudo ("padroes"), flags da semana do SU ("flags-su")
+// e rascunhos de comunicados ("comunicado"). Os registos diários nunca chegam aqui.
+import { aiAnalise, aiPadroes, aiFlagsSU, aiComunicado, validarPedidoFlags, validarPedidoComunicado, type AiFlag, type Publico } from "@/lib/ai";
+import type { Indicator } from "@/lib/su-semana";
 import { validarResumoPadroes } from "@/lib/analise";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +10,7 @@ export const runtime = "nodejs";
 
 const MAX_BYTES = 100 * 1024;
 
-const json = (body: { ok: boolean; text?: string[]; model?: string; error?: string }, status: number) =>
+const json = (body: { ok: boolean; text?: string[]; flags?: AiFlag[]; generated?: string; model?: string; error?: string }, status: number) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 export async function POST(req: Request) {
@@ -26,7 +28,26 @@ export async function POST(req: Request) {
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ ok: false, error: "O corpo tem de ser um objeto JSON." }, 400);
 
-  if ((body as { tipo?: unknown }).tipo === "padroes") {
+  const tipo = (body as { tipo?: unknown }).tipo;
+
+  if (tipo === "flags-su") {
+    const erro = validarPedidoFlags(body);
+    if (erro) return json({ ok: false, error: erro }, 400);
+    const b = body as { semana: string; indicadores: Indicator[] };
+    const r = await aiFlagsSU(b.indicadores.map(({ id, label, level, detail }) => ({ id, label, level, detail })), b.semana);
+    return json({ ok: true, flags: r.flags, text: r.sintese, model: r.model, generated: r.generated }, 200);
+  }
+
+  if (tipo === "comunicado") {
+    const erro = validarPedidoComunicado(body);
+    if (erro) return json({ ok: false, error: erro }, 400);
+    const b = body as { publico: Publico; contexto: string };
+    const r = await aiComunicado(b.publico, b.contexto);
+    if (!r) return json({ ok: false, error: "IA indisponível neste momento (sem chave configurada ou erro do fornecedor)." }, 503);
+    return json({ ok: true, text: r.text, model: r.model }, 200);
+  }
+
+  if (tipo === "padroes") {
     const erro = validarResumoPadroes(body);
     if (erro) return json({ ok: false, error: erro }, 400);
     const r = await aiPadroes(raw);

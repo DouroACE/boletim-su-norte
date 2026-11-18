@@ -2,9 +2,8 @@
   "name": "boletim-su-norte",
   "version": "1.0.0",
   "scripts": {
-    "prebuild": "node scripts/import-excel.mjs",
     "build": "next build",
-    "dev": "node scripts/import-excel.mjs && next dev",
+    "dev": "next dev",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "demo": "node scripts/gerar-demo.mjs"

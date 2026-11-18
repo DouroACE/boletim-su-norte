@@ -1,8 +1,9 @@
-// Navegação das 3 páginas do site.
+// Navegação do site: boletim → estudos → comunicação, e o relatório semanal para a DE-SNS.
 const PAGINAS = [
   ["/", "Boletim"],
-  ["/relatorios", "Relatórios"],
   ["/workspace", "Workspace"],
+  ["/comunicacao", "Comunicação"],
+  ["/relatorios", "Relatórios DE-SNS"],
 ] as const;
 
 export function Navegacao({ atual, query = "" }: { atual: (typeof PAGINAS)[number][0]; query?: string }) {

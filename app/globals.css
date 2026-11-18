@@ -434,3 +434,18 @@ label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; 
 .historico-titulo input { width: 20px; height: 20px; accent-color: var(--accent); }
 .historico-folha select { min-height: 40px; max-width: 100%; }
 .historico-folha .uls-table td, .historico-folha .uls-table th { white-space: normal; }
+
+/* Flags da semana do SU (Boletim) */
+.flags-su .ai-meta h3 { margin-right: auto; font-size: 18px; color: var(--ink); }
+.flags-su .method ul { list-style: none; padding-left: 0; }
+.flags-su .method li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+
+/* Boletim da semana e Comunicação */
+.sintese-su { margin: 12px 0; padding-left: 20px; display: grid; gap: 6px; }
+.opcoes-comunicacao { border: 0; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.opcoes-comunicacao label { display: flex; gap: 10px; align-items: center; min-height: 44px; overflow-wrap: anywhere; }
+.cards-comunicacao { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 8px; }
+.opcao-comunicacao { display: grid; gap: 6px; cursor: pointer; padding: 16px; }
+.opcao-comunicacao.ativa { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.opcao-comunicacao input { width: 20px; height: 20px; accent-color: var(--accent); }
+.card textarea, .rascunho { width: 100%; max-width: 100%; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }

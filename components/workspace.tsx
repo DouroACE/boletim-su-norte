@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { SeriesTabela, pedirPadroes, type IA, type TipoGrafico } from "@/components/analise";
 import { lerStore } from "@/components/relatorios";
 import { lerHistorico } from "@/components/historico";
+import { lerSU } from "@/components/boletim-semana";
+import { tabelaSU } from "@/lib/su-ficheiro";
+import type { LocalRec } from "@/lib/local";
 import { tabelaHistorico, type Historico } from "@/lib/historico";
 import { juntarTabelas, tabelaDePontos, type AggFn, type Period, type Serie } from "@/lib/analise";
 import { normalizarRegisto, type RegistoSemanal } from "@/lib/relatorios";
@@ -13,14 +16,15 @@ import type { Point } from "@/lib/sources";
 
 export type SeriePublica = { nome: string; pts: Point[] | null };
 
-type Estudo = { nome: string; variaveis: string[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean };
+/** Estudo guardado: variáveis e opções do gráfico, com as notas da IA (por validar) quando existem. */
+export type Estudo = { nome: string; variaveis: string[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean; notas?: string[]; guardado?: string };
 
 const CHAVE_ESTUDOS = "workspace-estudos-v1";
 const NOME = "Workspace de saúde sazonal";
 const DEMO = "/demo/semanas_FICTICIO.json";
 const AVISO_FICTICIO = "Dados fictícios de demonstração — não correspondem a atividade real.";
 
-function lerEstudos(): Estudo[] {
+export function lerEstudos(): Estudo[] {
   try {
     const j: unknown = JSON.parse(localStorage.getItem(CHAVE_ESTUDOS) ?? "[]");
     return Array.isArray(j) ? (j.filter((e) => e && typeof e.nome === "string" && Array.isArray(e.variaveis)) as Estudo[]) : [];
@@ -41,6 +45,7 @@ function gravarEstudos(e: Estudo[]): boolean {
 export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   const [registos, setRegistos] = useState<RegistoSemanal[]>([]);
   const [historico, setHistorico] = useState<Historico>({});
+  const [su, setSu] = useState<LocalRec[]>([]);
   const [demo, setDemo] = useState(false);
   const [estado, setEstado] = useState("");
   const [periodo, setPeriodo] = useState<Period>("semana");
@@ -57,6 +62,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
     setRegistos(l.ok ? Object.values(l.dados) : []);
     setEstudos(lerEstudos());
     setHistorico(lerHistorico().metricas);
+    setSu(lerSU().registos);
   }, []);
 
   // Ordem fixa: semanas, indicadores diários, séries públicas e histórico importado no Boletim. Os estudos guardam as variáveis pelo nome.
@@ -65,10 +71,11 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
       juntarTabelas([
         { prefixo: "Semana", table: tabelaSemanal(registos) },
         { prefixo: "Diário", table: tabelaDiaria(registos) },
+        { prefixo: "SU", table: tabelaSU(demo ? [] : su) },
         ...publicos.filter((p) => p.pts?.length).map((p) => ({ prefixo: "Público", table: tabelaDePontos(p.nome, p.pts ?? []) })),
         { prefixo: "Histórico", table: tabelaHistorico(historico) },
       ]),
-    [registos, publicos, historico],
+    [registos, publicos, historico, su, demo],
   );
   const nomes = table.columns.map((c) => c.name);
 
@@ -96,7 +103,8 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   function guardarEstudo() {
     const nome = nomeEstudo.trim();
     if (!nome) { setEstado("Dê um nome ao estudo."); return; }
-    const novo: Estudo = { nome, variaveis: escolha.map((i) => nomes[i]).filter(Boolean), periodo, funcao, tipo, normalizar };
+    const notas = ia.estado === "ok" ? ia.linhas : estudos.find((e) => e.nome === nome)?.notas;
+    const novo: Estudo = { nome, variaveis: escolha.map((i) => nomes[i]).filter(Boolean), periodo, funcao, tipo, normalizar, notas, guardado: new Date().toISOString().slice(0, 10) };
     const lista = [...estudos.filter((e) => e.nome !== nome), novo];
     if (!gravarEstudos(lista)) { setEstado("Não foi possível guardar neste browser."); return; }
     setEstudos(lista);
@@ -111,7 +119,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
     setFuncao(e.funcao);
     setTipo(e.tipo);
     setNormalizar(e.normalizar);
-    setIa({ estado: "vazio" });
+    setIa(e.notas?.length ? { estado: "ok", linhas: e.notas, modelo: "notas guardadas com o estudo" } : { estado: "vazio" });
     const faltam = e.variaveis.length - idx.length;
     setEstado(`Estudo «${e.nome}» aberto.${faltam ? ` ${faltam} variável(is) sem dados neste momento.` : ""}`);
   }
@@ -177,7 +185,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
 
       <details className="card dobra" open={estudos.length > 0}>
         <summary><h2 id="h-estudos">Estudos guardados</h2></summary>
-        <p className="hint">Guarda as variáveis e as opções do gráfico, para repetir o estudo com as semanas seguintes. Fica só neste browser.</p>
+        <p className="hint">Guarda as variáveis, as opções do gráfico e as notas da IA (peça-as em «Comentar padrões com IA» antes de guardar). Os estudos guardados podem dar origem a comunicados na página Comunicação. Ficam só neste browser.</p>
         <div className="row-actions">
           <label className="field">
             Nome do estudo
@@ -189,7 +197,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
           <ul className="lista-estudos">
             {estudos.map((e) => (
               <li key={e.nome}>
-                <span><strong>{e.nome}</strong> · {e.variaveis.join(", ")}</span>
+                <span><strong>{e.nome}</strong> · {e.variaveis.join(", ")}{e.notas?.length ? ` · ${e.notas.length} notas da IA` : ""}</span>
                 <span className="row-actions">
                   <button type="button" className="btn ghost" onClick={() => abrirEstudo(e)}>Abrir</button>
                   <button type="button" className="btn danger" onClick={() => apagarEstudo(e.nome)} aria-label={`Apagar ${e.nome}`}>Apagar</button>

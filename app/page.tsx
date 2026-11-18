@@ -3,17 +3,16 @@ import {
   PORTO, GONDOMAR, FONTES, safe, type Point, type SourceStatus, type FonteId,
 } from "@/lib/sources";
 import { seasonOf, seasonalBaseline, rolling, dayOfSeason, addDays, type Level } from "@/lib/stats";
-import { analyseLocal, local } from "@/lib/local";
 import { aiSummary } from "@/lib/ai";
+import { BoletimSemana } from "@/components/boletim-semana";
 import { regionalFlags, historySince, parseRange, rangeQuery, type Range } from "@/lib/flags";
 import { DateFilter } from "@/components/date-filter";
 import { Chip, LevelIcon, LEVEL_TEXT, Sparkline, Fonte, fmt, fmtDate } from "@/components/ui";
-import { SeasonChart, MeteoChart, LocalDailyChart, WeeklyDiagChart, HBarChart, DowChart, ManchesterChart, SimpleLine, MonthlyBars, type SeasonRow, type MeteoRow } from "@/components/charts";
+import { SeasonChart, MeteoChart, ManchesterChart, SimpleLine, MonthlyBars, type SeasonRow, type MeteoRow } from "@/components/charts";
 import { DGS_TEXT, dgsLevel, dgsToLevel, worstOf, uvLabel, airLabel, polenDia, ateMes, LIMIAR_OCUPACAO, LIMIAR_PROCURA, type DgsLevel, type AirDay } from "@/lib/risk";
 import { compareHomologous } from "@/lib/uls";
 import { Imprimir, RodapeImpressao } from "@/components/imprimir";
 import { Navegacao } from "@/components/nav";
-import { AlertasGerador } from "@/components/alertas";
 import { ImportarHistorico } from "@/components/historico";
 import { perigosAtivos, recomendacoes, TIPO_AVISO } from "@/lib/alertas";
 
@@ -116,8 +115,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     obitos: obitos.value?.pontos ?? [],
   };
   const avisosPto = isCurrent && avisos.value ? avisos.value.filter((a) => a.distrito === "Porto") : null;
-  const L = analyseLocal();
-  const summary = await aiSummary(flagsFoco, avisosPto ?? [], L?.patterns ?? []);
+  // Os dados do SU já não estão no servidor: a síntese do topo usa só as fontes públicas.
+  const summary = await aiSummary(flagsFoco, avisosPto ?? [], []);
 
   type Sinal = { label: string; level: Level; texto: string };
   const sinais: Sinal[] = [
@@ -156,7 +155,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const perigosRecom = range && range.to < today ? [] : perigosAtivos(avisosPto ?? [], Number(today.slice(5, 7)));
 
   const statuses: SourceStatus[] = [norte, friesa, icaro, obitos, manchester, forecast, avisos, meteoP, meteoG, arP, arG, uls, ulssa].map((s) => s.status);
-  statuses.push({ id: "excel", name: `Dados locais do SU (${local.source})`, url: "#local", ok: !!L, lastDate: L?.last });
 
   return (
     <>
@@ -476,70 +474,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
           </div>
         </section>
 
-        {/* DADOS LOCAIS */}
-        {L && (
-          <section id="local" aria-labelledby="h-local">
-            <div className="section-head">
-              <h2 id="h-local">Dados locais do SU · {fmtDate(L.first, { month: "short", year: "numeric" })} – {fmtDate(L.last, { month: "short", year: "numeric" })}</h2>
-              <p>A partir do ficheiro Excel de afluência ao SU ({L.kpis.dias} dias). Os padrões abaixo são detetados automaticamente.</p>
-            </div>
-            <div className="grid g-kpi" style={{ marginBottom: 16 }}>
-              {[
-                ["Média diária", fmt(L.kpis.mediaDiaria), "episódios"],
-                ["Total de episódios", fmt(L.kpis.totalEpisodios), ""],
-                ["Taxa de internamento", fmt(L.kpis.pctInternamento, 1), "%"],
-                ["Triagem → 1.ª observação", fmt(L.kpis.tempoTriagem), "min"],
-                ["Utentes com 80+ anos", fmt(L.kpis.pct80, 1), "%"],
-                ["Infeções respiratórias agudas", fmt(L.kpis.respiratorias), "diagnósticos"],
-              ].map(([k, v, u]) => (
-                <div key={k} className="card kpi">
-                  <span className="kpi-label">{k}</span>
-                  <div className="kpi-value">{v}<small>{u}</small></div>
-                </div>
-              ))}
-            </div>
-
-            <div className="patterns" style={{ marginBottom: 16 }}>
-              {L.patterns.map((p) => (
-                <article key={p.id} className={`pattern lv-${p.level}`}>
-                  <Chip level={p.level} />
-                  <h3>{p.title}</h3>
-                  <p>{p.detail}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="grid">
-              <article className="card">
-                <h3>Afluência diária e temperatura média</h3>
-                <LocalDailyChart data={L.daily} />
-                <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
-              </article>
-              <div className="grid g-2">
-                <article className="card">
-                  <h3>Diagnósticos infecciosos por semana</h3>
-                  <WeeklyDiagChart data={L.weekly} />
-                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
-                </article>
-                <article className="card">
-                  <h3>Média de episódios por dia da semana</h3>
-                  <DowChart data={L.byDow} />
-                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
-                </article>
-                <article className="card">
-                  <h3>Distribuição por grupo etário</h3>
-                  <HBarChart data={L.idades} x="pct" y="grupo" label="Percentagem de episódios por grupo etário" />
-                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
-                </article>
-                <article className="card">
-                  <h3>Área de residência</h3>
-                  <HBarChart data={L.origens} x="pct" y="origem" label="Percentagem de episódios por área de residência" />
-                  <Fonte ids={["local"]} extra={`Ficheiro ${local.source}`} />
-                </article>
-              </div>
-            </div>
-          </section>
-        )}
+        {/* DADOS DO SU DA SEMANA — carregados pela equipa, só no browser */}
+        <BoletimSemana />
 
         {/* CONTEXTO REGIONAL — colapsado; não entra na situação */}
         <section id="regional" aria-label="Contexto regional (ARS Norte)">
@@ -594,13 +530,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
         <details className="card dobra" id="historico">
           <summary><h2 id="h-historico">Importar dados de boletins passados</h2></summary>
           <ImportarHistorico />
-        </details>
-
-        {/* ALERTAS (equipa) */}
-        <details className="card dobra" id="alertas">
-          <summary><h2 id="h-gerador">Gerar textos de alerta (equipa)</h2></summary>
-          <p className="hint">Escolha um aviso do IPMA ou o boletim ÍCARO, ou indique os dados à mão. Os textos seguem as recomendações da DGS; reveja-os antes de enviar.</p>
-          <AlertasGerador avisos={avisosPto ?? []} icaro={icaro.value?.at(-1) ?? null} />
         </details>
 
         {/* METODOLOGIA */}

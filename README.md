@@ -18,17 +18,18 @@ O desenho do projeto (território, níveis de risco, páginas e fontes) está em
 | SNS Transparência · `indice-friesa`, `evolucao-diaria-do-indice-icaro` | Índices FRIESA (frio, Porto) e ÍCARO (calor), INSA | Diária |
 | IPMA (API aberta) | Avisos do distrito do Porto (inclui Gondomar) e previsão para o Porto | Horária |
 | Open-Meteo | Temperatura e UV (Porto e Gondomar); qualidade do ar (PM10, PM2,5, ozono) e pólen | Horária |
-| `data/su-local.xlsx` | Afluência diária ao SU (idades, diagnósticos, internamento, origem, temperatura) | Manual |
+| Excel de afluência ao SU (equipa) | Afluência diária ao SU (idades, diagnósticos, internamento, origem, temperatura), carregada todas as semanas no Boletim | Semanal, só no browser |
 
-Os dados da equipa não entram no repositório: o Excel semanal é lido só no browser, na página Relatórios, e fica guardado nesse browser.
+Os dados da equipa não entram no repositório: o Excel do SU (Boletim) e o modelo semanal (Relatórios) são lidos só no browser e ficam guardados nesse browser.
 
 ## Páginas
 
-- **Boletim** (`/`): situação da ULSSA, indicadores mensais, meteorologia e ambiente, mortalidade, dados locais do SU e, colapsados, a importação de boletins passados (cada coluna dos Excel antigos, como «MortDiaria no ACES» ou «ÍCARO >65 anos», passa a uma métrica padrão com o mesmo nome em todos os anos; `lib/historico.ts`; fica no browser, aparece no Workspace e descarrega-se em CSV) e o gerador de textos de alerta da equipa. O botão «Exportar Excel» descarrega todas as variáveis do período (`/api/exportar`).
-- **Relatórios** (`/relatorios`): a USP larga o Excel da semana ([modelo](/api/modelo-semanal): folhas Hospital, CSP, USP, Laboratório e Indicadores diários) e sai a tabela de Monitorização Semanal para a DE-SNS e o texto do e-mail, prontos a copiar. Pode rever cada semana e exportar cópias `.json`.
-- **Workspace** (`/workspace`): estudos com as semanas carregadas (matriz, laboratório e indicadores diários) e séries públicas (ÍCARO, FRIESA, óbitos, urgências da Região Norte): até 6 variáveis no mesmo gráfico, matriz de correlação, comentário da IA (só agregados) e estudos guardados. «Experimentar com semanas fictícias» usa `public/demo/semanas_FICTICIO.json` (`npm run demo`).
+- **Boletim** (`/`): dados públicos atualizados sozinhos (situação da ULSSA, indicadores mensais, meteorologia, ambiente, mortalidade) e o **boletim da semana**, montado quando a equipa carrega o Excel do SU: síntese e flags da IA, indicadores, padrões e gráficos. Também importa dados de boletins passados com métricas padronizadas. Imprimir / PDF e Excel do período.
+- **Workspace** (`/workspace`): estudos com todos os dados (semanas do SU, matriz da DE-SNS, histórico de boletins passados e séries públicas): até 6 variáveis no mesmo gráfico, correlações, notas da IA guardadas com cada estudo.
+- **Comunicação** (`/comunicacao`): a partir do boletim da semana ou de um estudo guardado, a IA redige rascunhos de comunicado à população, comunicado interno ou estratégias de controlo e execução (`aiComunicado`). Inclui os textos de alerta do procedimento da USP.
+- **Relatórios DE-SNS** (`/relatorios`): a Monitorização Semanal para a DE-SNS a partir do modelo semanal em Excel.
 
-Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analise`) redirecionam para estas páginas.
+Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analise`) redirecionam para estas páginas. Nada do que a equipa carrega vai para o servidor: à IA chegam só indicadores ou textos agregados.
 
 ## Níveis e alertas
 
@@ -54,10 +55,9 @@ Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analis
 
 O `vercel.json` agenda um cron diário (07:00 UTC) para `/api/revalidate`. A rota invalida o cache de todas as fontes e das páginas, e a visita seguinte volta a recolher tudo. Isto soma-se ao ISR de 3 em 3 horas. A rota exige `CRON_SECRET`.
 
-## Atualizar os dados locais
+## Boletim da semana (todas as semanas)
 
-1. Substituir `data/su-local.xlsx` por um Excel com as mesmas colunas.
-2. A Vercel volta a construir a página; o script `scripts/import-excel.mjs` converte o Excel em JSON.
+Os dados públicos atualizam-se sozinhos. Os do serviço de urgência não são públicos: a equipa carrega no Boletim o Excel de afluência ao SU (uma linha por dia; `lib/su-ficheiro.ts`). O ficheiro é lido e guardado só nesse browser; os dias novos juntam-se aos anteriores. A última semana é comparada com as 8 anteriores (`lib/su-semana.ts`: z ≥ 1 Atenção, z ≥ 2 Alerta) e a IA (`aiFlagsSU`) recebe só esses indicadores agregados, propõe flags e uma síntese; o nível vem sempre das regras. O boletim da semana fica guardado no browser para a página Comunicação.
 
 ## Ficheiro semanal da ULSSA
 
@@ -72,6 +72,7 @@ npx tsc --noEmit
 node scripts/selfcheck-uls.mjs        # lógica por ULS, DGS, faixa mensal, ar/pólen/UV e flags de IA
 node scripts/selfcheck-semanal.mjs    # modelo semanal → Excel → leitura, e tabelas do Workspace
 node scripts/selfcheck-historico.mjs  # padronização das métricas de boletins passados
+node scripts/selfcheck-su-semana.mjs  # indicadores semanais do SU e validação das flags de IA
 npm run build
 ```
 
