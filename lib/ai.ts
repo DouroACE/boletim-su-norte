@@ -244,12 +244,14 @@ export type Publico = "populacao" | "interno" | "estrategias";
 const COMUNICADO_BASE = `Trabalhas na Unidade de Saúde Pública da ULS Santo António (Gondomar e Porto Ocidental), na Equipa Local de Saúde Sazonal.
 Recebes um contexto com flags, indicadores e notas já validadas pela equipa (só números agregados).
 Regras: usa só a informação do contexto; não inventes números, datas, serviços nem contactos além da Linha SNS 24 (808 24 24 24) e do 112;
+não anuncies medidas, reforços ou decisões que não estejam no contexto (se fizer falta, escreve [medida a definir pela equipa]);
 português europeu, sem markdown, sem asteriscos; parágrafos curtos, um por linha.`;
 
 const COMUNICADO_SYSTEM: Record<Publico, string> = {
   populacao: `${COMUNICADO_BASE}
 Escreve um comunicado à população: título numa linha, depois 3 a 5 parágrafos em linguagem simples (nível de leitura básico),
-o que está a acontecer, quem está mais em risco, o que fazer (medidas de proteção e quando contactar a Linha SNS 24 ou o 112). Tom calmo e claro.`,
+o que está a acontecer, quem está mais em risco, o que fazer (medidas de proteção). Antes de ir à urgência, ligar para a Linha SNS 24 (808 24 24 24);
+o 112 só em emergência (ex.: dificuldade respiratória grave, dor no peito, perda de consciência). Nunca mandes ir diretamente à urgência. Tom calmo e claro.`,
   interno: `${COMUNICADO_BASE}
 Escreve um comunicado interno para os profissionais e parceiros da ULS (hospital, CSP, USP, autarquias): assunto numa linha,
 depois a situação com os números do contexto, o nível de risco, o que se pede a cada equipa e o próximo ponto de situação. Tom técnico e direto.`,
