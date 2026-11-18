@@ -7,8 +7,9 @@ import {
   METRICAS, csvHistorico, juntarHistorico, lerFolha, padronizar, resumoHistorico, validarHistorico,
   type FolhaLida, type Historico,
 } from "@/lib/historico";
+import { apagar as apagarPartilhado, guardar as guardarPartilhado } from "@/lib/partilha";
 
-export const CHAVE_HISTORICO = "historico-padronizado-v1";
+export const CHAVE_HISTORICO = "historico-padronizado-v1" as const;
 
 type Fonte = { ficheiro: string; folha: string; dias: number; de: string; ate: string; metricas: number; importado: string };
 type Guardado = { v: 1; metricas: Historico; fontes: Fonte[] };
@@ -79,9 +80,7 @@ export function ImportarHistorico() {
       fontes.push({ ficheiro: p.f.ficheiro, folha: p.f.folha, dias: p.f.dias, de: p.f.de, ate: p.f.ate, metricas: Object.keys(p.mapa).length, importado: new Date().toISOString().slice(0, 10) });
     }
     const novo: Guardado = { v: 1, metricas, fontes };
-    try {
-      localStorage.setItem(CHAVE_HISTORICO, JSON.stringify(novo));
-    } catch {
+    if (!guardarPartilhado(CHAVE_HISTORICO, novo)) {
       setEstado("Não foi possível guardar neste browser (armazenamento bloqueado ou cheio).");
       return;
     }
@@ -99,7 +98,7 @@ export function ImportarHistorico() {
 
   function apagar() {
     if (!window.confirm("Apagar o histórico padronizado deste browser? Os ficheiros originais não são afetados.")) return;
-    try { localStorage.removeItem(CHAVE_HISTORICO); } catch { /* nada a apagar */ }
+    apagarPartilhado(CHAVE_HISTORICO);
     setGuardado({ v: 1, metricas: {}, fontes: [] });
     setEstado("Histórico apagado.");
   }

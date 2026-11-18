@@ -40,6 +40,15 @@ Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analis
 - **Linha de base sazonal** (regional, `lib/stats.ts`): média dos últimos 7 dias face às 5 épocas anteriores. z ≥ 1 dá **Atenção** e z ≥ 2 dá **Alerta**.
 - **IA** (`lib/ai.ts`): Llama 3.3 70B (Groq) ou Qwen 2.5 72B (Hugging Face) recebe só os números já calculados e redige a síntese. A IA não decide níveis. Sem chave, o texto é gerado por regras.
 
+## Dados partilhados da equipa (Supabase)
+
+Projeto Supabase «Saude_Publica» (região UE, Frankfurt). Sem login, a app guarda tudo só no browser, como antes. Com **Entrar (equipa)** no menu, chega um link por e-mail; se o e-mail estiver na tabela `equipa`, os dados (semanas do SU, boletim da semana, matriz da DE-SNS, histórico, estudos) passam a ser lidos e gravados também na tabela `partilhado`, e toda a equipa vê o mesmo (`lib/partilha.ts`). Os ficheiros continuam a ser lidos no browser: só os dados agregados vão para a base.
+
+- Esquema e regras de acesso (RLS): `supabase/migrations/20261118000000_partilha_equipa.sql`. Quem não está em `equipa` não lê nem escreve; sem login, nada.
+- Adicionar alguém à equipa (SQL Editor do Supabase): `insert into public.equipa(email, nome) values ('nome@exemplo.pt', 'Nome');`
+- O envio de e-mails do Supabase sem SMTP próprio só chega a membros da organização no Supabase e tem limite por hora; para a equipa toda, configure um SMTP (Authentication → SMTP).
+- Endereços autorizados para o link: o site na Vercel e `http://localhost:3123`.
+
 ## Variáveis de ambiente (Vercel → Settings → Environment Variables)
 
 | Variável | Obrigatória | Para quê |

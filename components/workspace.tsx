@@ -7,6 +7,7 @@ import { lerStore } from "@/components/relatorios";
 import { lerHistorico } from "@/components/historico";
 import { lerSU } from "@/components/boletim-semana";
 import { tabelaSU } from "@/lib/su-ficheiro";
+import { guardar } from "@/lib/partilha";
 import type { LocalRec } from "@/lib/local";
 import { tabelaHistorico, type Historico } from "@/lib/historico";
 import { juntarTabelas, tabelaDePontos, type AggFn, type Period, type Serie } from "@/lib/analise";
@@ -19,7 +20,7 @@ export type SeriePublica = { nome: string; pts: Point[] | null };
 /** Estudo guardado: variáveis e opções do gráfico, com as notas da IA (por validar) quando existem. */
 export type Estudo = { nome: string; variaveis: string[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean; notas?: string[]; guardado?: string };
 
-const CHAVE_ESTUDOS = "workspace-estudos-v1";
+const CHAVE_ESTUDOS = "workspace-estudos-v1" as const;
 const NOME = "Workspace de saúde sazonal";
 const DEMO = "/demo/semanas_FICTICIO.json";
 const AVISO_FICTICIO = "Dados fictícios de demonstração — não correspondem a atividade real.";
@@ -33,14 +34,8 @@ export function lerEstudos(): Estudo[] {
   }
 }
 
-function gravarEstudos(e: Estudo[]): boolean {
-  try {
-    localStorage.setItem(CHAVE_ESTUDOS, JSON.stringify(e));
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Grava no browser e, com login da equipa, também na base partilhada.
+const gravarEstudos = (e: Estudo[]): boolean => guardar(CHAVE_ESTUDOS, e);
 
 export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   const [registos, setRegistos] = useState<RegistoSemanal[]>([]);

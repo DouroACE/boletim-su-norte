@@ -10,10 +10,11 @@ import {
   type Nivel, type RegistoSemanal,
 } from "@/lib/relatorios";
 import { lerSemana, type Folhas } from "@/lib/semanal";
+import { guardar } from "@/lib/partilha";
 import s from "@/app/relatorios/relatorios.module.css";
 
 /** Chave do localStorage. Só este browser; cada leitura e escrita está em try/catch. */
-const CHAVE = "relatorios-semanais-v1";
+const CHAVE = "relatorios-semanais-v1" as const;
 const TAMANHO_RESUMO = 60;
 
 type Store = Record<string, RegistoSemanal>;
@@ -37,14 +38,8 @@ export function lerStore(): Leitura {
   }
 }
 
-function gravarStore(dados: Store): boolean {
-  try {
-    localStorage.setItem(CHAVE, JSON.stringify(dados));
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Grava no browser e, com login da equipa, também na base partilhada.
+const gravarStore = (dados: Store): boolean => guardar(CHAVE, dados);
 
 const curto = (t: string) => (t.trim().length > TAMANHO_RESUMO ? `${t.trim().slice(0, TAMANHO_RESUMO - 1)}…` : t.trim() || "—");
 const numPt = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");

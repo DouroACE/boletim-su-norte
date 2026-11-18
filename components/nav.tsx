@@ -1,4 +1,6 @@
 // Navegação do site: boletim → estudos → comunicação, e o relatório semanal para a DE-SNS.
+import { Sessao } from "@/components/sessao";
+
 const PAGINAS = [
   ["/", "Boletim"],
   ["/workspace", "Workspace"],
@@ -17,6 +19,7 @@ export function Navegacao({ atual, query = "" }: { atual: (typeof PAGINAS)[numbe
             </li>
           ))}
         </ul>
+        <Sessao />
       </div>
     </nav>
   );

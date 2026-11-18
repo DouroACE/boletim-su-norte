@@ -9,9 +9,10 @@ import { indicadoresDaSemana, type Indicator } from "@/lib/su-semana";
 import { juntarSU, lerFicheiroSU } from "@/lib/su-ficheiro";
 import { parseCSV } from "@/lib/analise";
 import type { AiFlag } from "@/lib/ai";
+import { apagar as apagarPartilhado, guardar } from "@/lib/partilha";
 
-export const CHAVE_SU = "su-semanal-v1";
-export const CHAVE_BOLETIM = "boletim-semana-v1";
+export const CHAVE_SU = "su-semanal-v1" as const;
+export const CHAVE_BOLETIM = "boletim-semana-v1" as const;
 
 type Ficheiro = { nome: string; dias: number; de: string; ate: string; carregado: string };
 type Guardado = { v: 1; registos: LocalRec[]; ficheiros: Ficheiro[] };
@@ -43,9 +44,8 @@ export function lerBoletim(): BoletimGuardado | null {
   }
 }
 
-const gravar = (k: string, v: unknown) => {
-  try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; }
-};
+// Grava no browser e, com login da equipa, também na base partilhada.
+const gravar = (k: typeof CHAVE_SU | typeof CHAVE_BOLETIM, v: unknown) => guardar(k, v);
 
 /** Sem IA: uma flag por indicador em Atenção ou Alerta (o mesmo que as regras do servidor). */
 function flagsRegras(ind: Indicator[]): FlagsSU {
@@ -129,7 +129,8 @@ export function BoletimSemana() {
 
   function apagar() {
     if (!window.confirm("Apagar os dados do SU e o boletim da semana deste browser? Os ficheiros originais não são afetados.")) return;
-    try { localStorage.removeItem(CHAVE_SU); localStorage.removeItem(CHAVE_BOLETIM); } catch { /* nada */ }
+    apagarPartilhado(CHAVE_SU);
+    apagarPartilhado(CHAVE_BOLETIM);
     setG(VAZIO);
     setEstado("Dados do SU apagados deste browser.");
   }
