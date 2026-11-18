@@ -1,5 +1,5 @@
 // Dados partilhados da equipa (Supabase, projeto Saude_Publica, UE). Só no browser.
-// Sem login, a app usa só o localStorage, como antes. Com login de alguém da tabela «equipa», cada gravação vai também
+// Sem entrar, a app usa só o localStorage, como antes. Quem entra com o código da equipa (sessão anónima, sem e-mail), cada gravação vai também
 // para a base e, ao abrir, a app traz o que lá está. As regras de acesso (RLS) estão em supabase/migrations.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -23,16 +23,36 @@ export function supabase(): SupabaseClient | null {
 
 const avisar = (detalhe: string) => window.dispatchEvent(new CustomEvent("partilha", { detail: detalhe }));
 
-/** Sessão atual e se o e-mail está na lista da equipa. */
+/** Sessão atual e se já entrou na equipa (com o código, ou por e-mail da lista). */
 export async function estadoPartilha(): Promise<EstadoPartilha> {
   const sb = supabase();
   if (!sb) return { email: null, equipa: false };
   const { data } = await sb.auth.getSession();
-  const email = data.session?.user.email?.toLowerCase() ?? null;
-  if (!email) { daEquipa = false; return { email: null, equipa: false }; }
-  const { data: linhas, error } = await sb.from("equipa").select("email").eq("email", email).limit(1);
-  daEquipa = !error && !!linhas?.length;
-  return { email, equipa: daEquipa, ...(error ? { erro: error.message } : {}) };
+  const user = data.session?.user;
+  if (!user) { daEquipa = false; return { email: null, equipa: false }; }
+  const email = user.email?.toLowerCase() || null;
+  const [{ data: membro, error }, porEmail] = await Promise.all([
+    sb.from("membros").select("uid").eq("uid", user.id).limit(1),
+    email ? sb.from("equipa").select("email").eq("email", email).limit(1) : Promise.resolve({ data: [] as unknown[] }),
+  ]);
+  daEquipa = !!membro?.length || !!porEmail.data?.length;
+  return { email: email ?? (daEquipa ? "código da equipa" : null), equipa: daEquipa, ...(error ? { erro: error.message } : {}) };
+}
+
+/** Entra com o código da equipa: abre uma sessão anónima (sem e-mail) e confirma o código na base. */
+export async function entrarComCodigo(codigo: string): Promise<{ ok: boolean; erro?: string }> {
+  const sb = supabase();
+  if (!sb) return { ok: false, erro: "Indisponível fora do browser." };
+  const { data } = await sb.auth.getSession();
+  if (!data.session) {
+    const { error } = await sb.auth.signInAnonymously();
+    if (error) return { ok: false, erro: error.message };
+  }
+  const { data: ok, error } = await sb.rpc("entrar_equipa", { codigo });
+  if (error) return { ok: false, erro: error.message };
+  if (!ok) return { ok: false, erro: "Código errado." };
+  await estadoPartilha();
+  return { ok: true };
 }
 
 /**

@@ -42,3 +42,9 @@
 @media (min-width: 640px) { .controlos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .legendaGrupos { margin: 12px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
 .escolha + .escolha { margin-top: 8px; }
+.variaveis { display: grid; gap: 8px; margin: 8px 0 12px; min-width: 0; }
+.linhaVariavel { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-width: 0; }
+.linhaVariavel .field { margin: 0; }
+.linhaVariavel select { width: 100%; }
+.amostraCor { width: 14px; height: 14px; border-radius: 3px; }
+.variaveis > button { justify-self: start; }

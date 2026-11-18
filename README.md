@@ -42,12 +42,12 @@ Os endereços antigos (`/painel`, `/alertas`, `/flags-ia`, `/exportar`, `/analis
 
 ## Dados partilhados da equipa (Supabase)
 
-Projeto Supabase «Saude_Publica» (região UE, Frankfurt). Sem login, a app guarda tudo só no browser, como antes. Com **Entrar (equipa)** no menu, chega um link por e-mail; se o e-mail estiver na tabela `equipa`, os dados (semanas do SU, boletim da semana, matriz da DE-SNS, histórico, estudos) passam a ser lidos e gravados também na tabela `partilhado`, e toda a equipa vê o mesmo (`lib/partilha.ts`). Os ficheiros continuam a ser lidos no browser: só os dados agregados vão para a base.
+Projeto Supabase «Saude_Publica» (região UE, Frankfurt). Sem entrar, a app guarda tudo só no browser. Em **Entrar (equipa)** no menu escreve-se o **código da equipa** (sem e-mail): o browser abre uma sessão anónima e a base confirma o código; a partir daí os dados (semanas do SU, boletim da semana, matriz da DE-SNS, histórico, estudos) são lidos e gravados também na tabela `partilhado`, e todos os que entraram veem o mesmo (`lib/partilha.ts`). Os ficheiros continuam a ser lidos no browser: só os dados agregados vão para a base.
 
-- Esquema e regras de acesso (RLS): `supabase/migrations/20261118000000_partilha_equipa.sql`. Quem não está em `equipa` não lê nem escreve; sem login, nada.
-- Adicionar alguém à equipa (SQL Editor do Supabase): `insert into public.equipa(email, nome) values ('nome@exemplo.pt', 'Nome');`
-- O envio de e-mails do Supabase sem SMTP próprio só chega a membros da organização no Supabase e tem limite por hora; para a equipa toda, configure um SMTP (Authentication → SMTP).
-- Endereços autorizados para o link: o site na Vercel e `http://localhost:3123`.
+- Definir ou mudar o código (SQL Editor do Supabase; mínimo 12 caracteres): `select public.definir_codigo_equipa('…');`. O código não está no repositório; a base guarda só o hash (bcrypt).
+- Tirar o acesso a todos os que já entraram (depois de mudar o código): `delete from public.membros;`.
+- Regras de acesso (RLS): `supabase/migrations/`. Sem ter entrado com o código, não se lê nem escreve; a chave publicável e o endereço da base são públicos (estão no repositório), por isso a proteção é o código, não o link.
+- Também é possível dar acesso por e-mail (`public.equipa`), se um dia se configurar um SMTP.
 
 ## Variáveis de ambiente (Vercel → Settings → Environment Variables)
 

@@ -134,29 +134,34 @@ export function SeriesTabela({ t, periodo, onPeriodo, funcao, onFuncao, tipo, on
     return m.set(g, [...(m.get(g) ?? []), ci]);
   }, new Map<string, number[]>())];
 
-  const alternar = (ci: number) =>
-    onEscolha(escolhidas.includes(ci) ? escolhidas.filter((x) => x !== ci) : [...escolhidas, ci]);
+  const livres = numericos.filter((ci) => !escolhidas.includes(ci));
+  const rotulo = (ci: number, grupo: string) => { const n = t.table.columns[ci].name; return n.startsWith(`${grupo} · `) ? n.slice(grupo.length + 3) : n; };
 
   return (
     <>
       <h3 className="sub-h">Séries no tempo · {PERIODOS.find((p) => p[0] === periodo)?.[1]} · {FUNCOES.find((f) => f[0] === funcao)?.[1]}</h3>
-      <p className={estilos.legendaGrupos}>Variáveis (de 1 a {MAX_SERIES_GRAFICO}){escolhidas.length ? ` · ${escolhidas.length} escolhida(s)` : ""}</p>
-      {grupos.map(([grupo, cis]) => (
-        <fieldset key={grupo} className={estilos.escolha}>
-          <legend>{grupo}</legend>
-          {cis.map((ci) => {
-            const marcado = escolhidas.includes(ci);
-            const bloqueado = marcado ? escolhidas.length <= 1 : escolhidas.length >= MAX_SERIES_GRAFICO;
-            const nome = t.table.columns[ci].name;
-            return (
-              <label key={ci} className={estilos.opcao}>
-                <input type="checkbox" checked={marcado} disabled={bloqueado} onChange={() => alternar(ci)} />
-                <span>{nome.startsWith(`${grupo} · `) ? nome.slice(grupo.length + 3) : nome}</span>
-              </label>
-            );
-          })}
-        </fieldset>
-      ))}
+      <div className={estilos.variaveis}>
+        <p className={estilos.legendaGrupos}>Variáveis (até {MAX_SERIES_GRAFICO})</p>
+        {escolhidas.map((ci, k) => (
+          <div key={k} className={estilos.linhaVariavel}>
+            <span className={estilos.amostraCor} style={{ background: CORES[k] }} aria-hidden="true" />
+            <label className="field">
+              <span className="sr-only">Variável {k + 1}</span>
+              <select value={ci} onChange={(e) => onEscolha(escolhidas.map((x, j) => (j === k ? Number(e.target.value) : x)))}>
+                {grupos.map(([grupo, cis]) => (
+                  <optgroup key={grupo} label={grupo}>
+                    {cis.filter((c) => c === ci || !escolhidas.includes(c)).map((c) => <option key={c} value={c}>{rotulo(c, grupo)}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="btn ghost" disabled={escolhidas.length <= 1} onClick={() => onEscolha(escolhidas.filter((_, j) => j !== k))} aria-label={`Tirar ${t.table.columns[ci].name}`}>Tirar</button>
+          </div>
+        ))}
+        {escolhidas.length < MAX_SERIES_GRAFICO && livres.length > 0 && (
+          <button type="button" className="btn ghost" onClick={() => onEscolha([...escolhidas, livres[0]])}>+ Adicionar variável</button>
+        )}
+      </div>
       <div className={estilos.controlos}>
         <label className="field">
           Tipo de gráfico

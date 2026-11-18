@@ -17,18 +17,33 @@ import type { Point } from "@/lib/sources";
 
 export type SeriePublica = { nome: string; pts: Point[] | null };
 
-/** Estudo guardado: variáveis e opções do gráfico, com as notas da IA (por validar) quando existem. */
-export type Estudo = { nome: string; variaveis: string[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean; notas?: string[]; guardado?: string };
+/** Um gráfico do estudo: variáveis (pelo nome), opções e as notas da IA (por validar) quando existem. */
+export type GraficoGuardado = { variaveis: string[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean; notas?: string[] };
+/** Estudo guardado: um ou mais gráficos. */
+export type Estudo = { nome: string; graficos: GraficoGuardado[]; guardado?: string };
+
+type Grafico = { id: number; escolha: number[]; periodo: Period; funcao: AggFn; tipo: TipoGrafico; normalizar: boolean; ia: IA };
+const MAX_GRAFICOS = 6;
+let proximoId = 1;
+const novoGrafico = (escolha: number[]): Grafico => ({ id: proximoId++, escolha, periodo: "semana", funcao: "media", tipo: "linhas", normalizar: false, ia: { estado: "vazio" } });
 
 const CHAVE_ESTUDOS = "workspace-estudos-v1" as const;
 const NOME = "Workspace de saúde sazonal";
 const DEMO = "/demo/semanas_FICTICIO.json";
 const AVISO_FICTICIO = "Dados fictícios de demonstração — não correspondem a atividade real.";
 
+/** Estudos guardados. Os do formato antigo (um só gráfico, campos soltos) passam a um estudo com um gráfico. */
 export function lerEstudos(): Estudo[] {
   try {
     const j: unknown = JSON.parse(localStorage.getItem(CHAVE_ESTUDOS) ?? "[]");
-    return Array.isArray(j) ? (j.filter((e) => e && typeof e.nome === "string" && Array.isArray(e.variaveis)) as Estudo[]) : [];
+    if (!Array.isArray(j)) return [];
+    return j.flatMap((e): Estudo[] => {
+      if (!e || typeof e.nome !== "string") return [];
+      if (Array.isArray(e.graficos)) return [e as Estudo];
+      if (!Array.isArray(e.variaveis)) return [];
+      const { variaveis, periodo = "semana", funcao = "media", tipo = "linhas", normalizar = false, notas } = e;
+      return [{ nome: e.nome, guardado: e.guardado, graficos: [{ variaveis, periodo, funcao, tipo, normalizar, notas }] }];
+    });
   } catch {
     return [];
   }
@@ -43,12 +58,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   const [su, setSu] = useState<LocalRec[]>([]);
   const [demo, setDemo] = useState(false);
   const [estado, setEstado] = useState("");
-  const [periodo, setPeriodo] = useState<Period>("semana");
-  const [funcao, setFuncao] = useState<AggFn>("media");
-  const [tipo, setTipo] = useState<TipoGrafico>("linhas");
-  const [normalizar, setNormalizar] = useState(false);
-  const [escolha, setEscolha] = useState<number[]>([1, 2]);
-  const [ia, setIa] = useState<IA>({ estado: "vazio" });
+  const [graficos, setGraficos] = useState<Grafico[]>(() => [novoGrafico([1, 2])]);
   const [estudos, setEstudos] = useState<Estudo[]>([]);
   const [nomeEstudo, setNomeEstudo] = useState("");
 
@@ -95,11 +105,27 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
     setEstado("");
   }
 
+  const mudar = (id: number, alteracao: Partial<Grafico>) => setGraficos((gs) => gs.map((g) => (g.id === id ? { ...g, ...alteracao } : g)));
+  // Gráfico novo: as duas primeiras variáveis que ainda não estão noutro gráfico (ou as duas primeiras de todas).
+  function adicionarGrafico() {
+    const usadas = new Set(graficos.flatMap((g) => g.escolha));
+    const numericos = table.columns.flatMap((c, ci) => (c.type === "number" ? [ci] : []));
+    const livres = numericos.filter((ci) => !usadas.has(ci));
+    setGraficos((gs) => [...gs, novoGrafico((livres.length ? livres : numericos).slice(0, 2))]);
+  }
+
   function guardarEstudo() {
     const nome = nomeEstudo.trim();
     if (!nome) { setEstado("Dê um nome ao estudo."); return; }
-    const notas = ia.estado === "ok" ? ia.linhas : estudos.find((e) => e.nome === nome)?.notas;
-    const novo: Estudo = { nome, variaveis: escolha.map((i) => nomes[i]).filter(Boolean), periodo, funcao, tipo, normalizar, notas, guardado: new Date().toISOString().slice(0, 10) };
+    const antigo = estudos.find((e) => e.nome === nome);
+    const novo: Estudo = {
+      nome,
+      guardado: new Date().toISOString().slice(0, 10),
+      graficos: graficos.map((g, i) => ({
+        variaveis: g.escolha.map((ci) => nomes[ci]).filter(Boolean), periodo: g.periodo, funcao: g.funcao, tipo: g.tipo, normalizar: g.normalizar,
+        notas: g.ia.estado === "ok" ? g.ia.linhas : antigo?.graficos[i]?.notas,
+      })),
+    };
     const lista = [...estudos.filter((e) => e.nome !== nome), novo];
     if (!gravarEstudos(lista)) { setEstado("Não foi possível guardar neste browser."); return; }
     setEstudos(lista);
@@ -108,15 +134,15 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
   }
 
   function abrirEstudo(e: Estudo) {
-    const idx = e.variaveis.map((v) => nomes.indexOf(v)).filter((i) => i > 0);
-    setEscolha(idx);
-    setPeriodo(e.periodo);
-    setFuncao(e.funcao);
-    setTipo(e.tipo);
-    setNormalizar(e.normalizar);
-    setIa(e.notas?.length ? { estado: "ok", linhas: e.notas, modelo: "notas guardadas com o estudo" } : { estado: "vazio" });
-    const faltam = e.variaveis.length - idx.length;
-    setEstado(`Estudo «${e.nome}» aberto.${faltam ? ` ${faltam} variável(is) sem dados neste momento.` : ""}`);
+    let faltam = 0;
+    setGraficos(e.graficos.map((g) => {
+      const idx = g.variaveis.map((v) => nomes.indexOf(v)).filter((i) => i > 0);
+      faltam += g.variaveis.length - idx.length;
+      return { ...novoGrafico(idx), periodo: g.periodo, funcao: g.funcao, tipo: g.tipo, normalizar: g.normalizar,
+        ia: g.notas?.length ? { estado: "ok", linhas: g.notas, modelo: "notas guardadas com o estudo" } : { estado: "vazio" } };
+    }));
+    setNomeEstudo(e.nome);
+    setEstado(`Estudo «${e.nome}» aberto (${e.graficos.length} gráfico(s)).${faltam ? ` ${faltam} variável(is) sem dados neste momento.` : ""}`);
   }
 
   function apagarEstudo(nome: string) {
@@ -124,9 +150,9 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
     if (gravarEstudos(lista)) setEstudos(lista);
   }
 
-  async function analisar(series: Serie[]) {
-    setIa({ estado: "a-gerar" });
-    setIa(await pedirPadroes(NOME, series, periodo, funcao));
+  async function analisar(g: Grafico, series: Serie[]) {
+    mudar(g.id, { ia: { estado: "a-gerar" } });
+    mudar(g.id, { ia: await pedirPadroes(NOME, series, g.periodo, g.funcao) });
   }
 
   const semanas = registos.length;
@@ -155,32 +181,49 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
 
       <details className="card dobra" open>
         <summary><h2 id="h-estudo">Estudo</h2></summary>
-        <p className="hint">Escolha até 6 variáveis: veja-as no mesmo gráfico, a matriz de correlação e peça à IA um comentário sobre os padrões. Correlação não implica causalidade.</p>
+        <p className="hint">Cada gráfico junta até 6 variáveis, com a sua matriz de correlação e o comentário da IA. Junte mais gráficos para estudar outras variáveis lado a lado. Correlação não implica causalidade.</p>
         {table.columns.length < 2 ? (
           <p className="hint">Sem variáveis com data para estudar.</p>
         ) : (
-          <SeriesTabela
-            t={{ nome: NOME, table }}
-            periodo={periodo}
-            onPeriodo={setPeriodo}
-            funcao={funcao}
-            onFuncao={setFuncao}
-            tipo={tipo}
-            onTipo={setTipo}
-            normalizar={normalizar}
-            onNormalizar={setNormalizar}
-            escolha={escolha}
-            onEscolha={setEscolha}
-            ia={ia}
-            onAnalisar={(series) => void analisar(series)}
-            notaCorrelacao={false}
-          />
+          <>
+            {graficos.map((g, i) => (
+              <section key={g.id} className="grafico-estudo" aria-labelledby={`h-grafico-${g.id}`}>
+                <div className="grafico-estudo-topo">
+                  <h3 id={`h-grafico-${g.id}`}>Gráfico {i + 1}</h3>
+                  {graficos.length > 1 && (
+                    <button type="button" className="btn ghost" onClick={() => setGraficos((gs) => gs.filter((x) => x.id !== g.id))}>Remover gráfico</button>
+                  )}
+                </div>
+                <SeriesTabela
+                  t={{ nome: NOME, table }}
+                  periodo={g.periodo}
+                  onPeriodo={(periodo) => mudar(g.id, { periodo })}
+                  funcao={g.funcao}
+                  onFuncao={(funcao) => mudar(g.id, { funcao })}
+                  tipo={g.tipo}
+                  onTipo={(tipo) => mudar(g.id, { tipo })}
+                  normalizar={g.normalizar}
+                  onNormalizar={(normalizar) => mudar(g.id, { normalizar })}
+                  escolha={g.escolha}
+                  onEscolha={(escolha) => mudar(g.id, { escolha })}
+                  ia={g.ia}
+                  onAnalisar={(series) => void analisar(g, series)}
+                  notaCorrelacao={false}
+                />
+              </section>
+            ))}
+            {graficos.length < MAX_GRAFICOS && (
+              <div className="row-actions">
+                <button type="button" className="btn" onClick={adicionarGrafico}>+ Adicionar gráfico</button>
+              </div>
+            )}
+          </>
         )}
       </details>
 
       <details className="card dobra" open={estudos.length > 0}>
         <summary><h2 id="h-estudos">Estudos guardados</h2></summary>
-        <p className="hint">Guarda as variáveis, as opções do gráfico e as notas da IA (peça-as em «Comentar padrões com IA» antes de guardar). Os estudos guardados podem dar origem a comunicados na página Comunicação. Ficam só neste browser.</p>
+        <p className="hint">Guarda todos os gráficos, com as variáveis, as opções e as notas da IA (peça-as em «Comentar padrões com IA» antes de guardar). Os estudos guardados podem dar origem a comunicados na página Comunicação. Ficam só neste browser.</p>
         <div className="row-actions">
           <label className="field">
             Nome do estudo
@@ -192,7 +235,7 @@ export function Workspace({ publicos }: { publicos: SeriePublica[] }) {
           <ul className="lista-estudos">
             {estudos.map((e) => (
               <li key={e.nome}>
-                <span><strong>{e.nome}</strong> · {e.variaveis.join(", ")}{e.notas?.length ? ` · ${e.notas.length} notas da IA` : ""}</span>
+                <span><strong>{e.nome}</strong> · {e.graficos.length} gráfico(s): {e.graficos.map((g) => g.variaveis.join(", ")).join(" | ")}{e.graficos.some((g) => g.notas?.length) ? " · com notas da IA" : ""}</span>
                 <span className="row-actions">
                   <button type="button" className="btn ghost" onClick={() => abrirEstudo(e)}>Abrir</button>
                   <button type="button" className="btn danger" onClick={() => apagarEstudo(e.nome)} aria-label={`Apagar ${e.nome}`}>Apagar</button>

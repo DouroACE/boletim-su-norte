@@ -1,14 +1,14 @@
 "use client";
-// Entrar com o e-mail da equipa (link enviado por e-mail) para usar os dados partilhados. Sem login, tudo fica só neste browser.
+// Entrar com o código da equipa (sem e-mail) para usar os dados partilhados. Sem entrar, tudo fica só neste browser.
 import { useEffect, useState } from "react";
-import { estadoPartilha, sincronizar, supabase, type EstadoPartilha } from "@/lib/partilha";
+import { entrarComCodigo, estadoPartilha, sincronizar, supabase, type EstadoPartilha } from "@/lib/partilha";
 
 const RECARREGADO = "partilha-recarregada";
 
 export function Sessao() {
   const [estado, setEstado] = useState<EstadoPartilha>({ email: null, equipa: false });
   const [aberto, setAberto] = useState(false);
-  const [email, setEmail] = useState("");
+  const [codigo, setCodigo] = useState("");
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -32,11 +32,15 @@ export function Sessao() {
 
   async function entrar(ev: React.FormEvent) {
     ev.preventDefault();
-    const sb = supabase();
-    if (!sb) return;
-    setMsg("A enviar…");
-    const { error } = await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: window.location.href.split("#")[0] } });
-    setMsg(error ? `Não foi possível enviar: ${error.message}` : "Enviámos um link para o seu e-mail. Abra-o neste browser para entrar.");
+    setMsg("A confirmar…");
+    const r = await entrarComCodigo(codigo);
+    setCodigo("");
+    if (!r.ok) { setMsg(r.erro ?? "Não foi possível entrar."); return; }
+    setMsg("");
+    setAberto(false);
+    const e = await estadoPartilha();
+    setEstado(e);
+    if (await sincronizar()) window.location.reload();
   }
 
   async function sair() {
@@ -52,7 +56,7 @@ export function Sessao() {
         </span>
         <span className="sessao-email">{estado.email}</span>
         <button type="button" className="btn ghost" onClick={() => void sair()}>Sair</button>
-        {!estado.equipa && <span className="hint">Peça para adicionar este e-mail à lista da equipa.</span>}
+        {!estado.equipa && <span className="hint">Entre com o código da equipa para ver os dados partilhados.</span>}
         <span className="sr-only" role="status" aria-live="polite">{msg}</span>
       </div>
     );
@@ -62,9 +66,9 @@ export function Sessao() {
     <div className="sessao">
       {aberto ? (
         <form onSubmit={(e) => void entrar(e)} className="sessao-form">
-          <label className="sr-only" htmlFor="sessao-email">E-mail da equipa</label>
-          <input id="sessao-email" type="email" required autoComplete="email" placeholder="e-mail da equipa" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button type="submit" className="btn">Enviar link</button>
+          <label className="sr-only" htmlFor="sessao-codigo">Código da equipa</label>
+          <input id="sessao-codigo" type="password" required autoComplete="off" placeholder="código da equipa" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+          <button type="submit" className="btn">Entrar</button>
           <button type="button" className="btn ghost" onClick={() => setAberto(false)}>Cancelar</button>
         </form>
       ) : (

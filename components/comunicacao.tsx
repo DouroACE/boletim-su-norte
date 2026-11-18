@@ -27,12 +27,14 @@ function contextoBoletim(b: BoletimGuardado): string {
   ].join("\n");
 }
 
-/** Contexto de um estudo guardado: variáveis, opções e notas da IA. */
+/** Contexto de um estudo guardado: para cada gráfico, variáveis, agregação e notas da IA. */
 function contextoEstudo(e: Estudo): string {
   return [
-    `Estudo da equipa «${e.nome}»${e.guardado ? ` (guardado a ${dataPt(e.guardado)})` : ""}.`,
-    `Variáveis: ${e.variaveis.join("; ")}. Agregação: ${e.funcao} por ${e.periodo}.`,
-    "Notas do estudo:", ...(e.notas?.length ? e.notas.map((l) => `- ${l}`) : ["- Sem notas da IA guardadas com este estudo."]),
+    `Estudo da equipa «${e.nome}»${e.guardado ? ` (guardado a ${dataPt(e.guardado)})` : ""}, com ${e.graficos.length} gráfico(s).`,
+    ...e.graficos.flatMap((g, i) => [
+      `Gráfico ${i + 1}: ${g.variaveis.join("; ")} (agregação: ${g.funcao} por ${g.periodo}).`,
+      ...(g.notas?.length ? g.notas.map((l) => `- ${l}`) : ["- Sem notas da IA para este gráfico."]),
+    ]),
   ].join("\n");
 }
 
@@ -105,7 +107,7 @@ export function Comunicacao({ avisos }: { avisos: string }) {
           <label className="field">
             Estudo
             <select value={estudoNome} onChange={(e) => setEstudoNome(e.target.value)}>
-              {estudos.map((e) => <option key={e.nome} value={e.nome}>{e.nome}{e.notas?.length ? ` · ${e.notas.length} notas` : ""}</option>)}
+              {estudos.map((e) => <option key={e.nome} value={e.nome}>{e.nome} · {e.graficos.length} gráfico(s){e.graficos.some((g) => g.notas?.length) ? " · com notas" : ""}</option>)}
             </select>
           </label>
         )}
